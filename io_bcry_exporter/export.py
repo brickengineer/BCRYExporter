@@ -246,23 +246,14 @@ class CrytekDaeExporter:
         # If true, will respect edges marked as sharp
         use_edge_sharp = False
 
-        has_smooth_by_angle_modfier = False
+        # CAUTION: "Smooth by Angle" modifier (an "Essential" library geometry node actually, not normal modifier) does not take effect during export, so only find 'EDGE_SPLIT' type modifiers
+        # On start export, get_mesh() will call bcry_split_modifier() to replace "Smooth by Angle" modifier with an 'EDGE_SPLIT' modifier with same settings, so here we only need to check 'EDGE_SPLIT' modifiers
         for modifier in object_.modifiers:
-            # It is an "Essential" library geometry node, can't detect type, just use name here
-            if modifier.name == "Smooth by Angle":
-                use_edge_angle = True
-                use_edge_sharp = not modifier["Socket_1"]
-                split_angle = modifier["Input_1"]
-                has_smooth_by_angle_modfier = True
+            if modifier.type == 'EDGE_SPLIT' and modifier.show_viewport:
+                use_edge_angle |= modifier.use_edge_angle
+                use_edge_sharp |= modifier.use_edge_sharp
+                split_angle = modifier.split_angle
                 break
-        # Only try to find Edge Split modifier if Smooth by Angle is not present
-        if not has_smooth_by_angle_modfier:
-            for modifier in object_.modifiers:
-                if modifier.type == 'EDGE_SPLIT' and modifier.show_viewport:
-                    use_edge_angle |= modifier.use_edge_angle
-                    use_edge_sharp |= modifier.use_edge_sharp
-                    split_angle = modifier.split_angle
-                    break
 
         float_normals = None
         if self._config.custom_normals:

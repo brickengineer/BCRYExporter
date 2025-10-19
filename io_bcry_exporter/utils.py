@@ -172,6 +172,8 @@ def get_bmesh(object_, apply_modifiers=False):
     # That lacking related with Blender, if it will fix in future that
     # code will be clean.
 
+    # CAUTION: "Smooth by Angle" modifier (an "Essential" library geometry node actually, not normal modifier) does not take effect during export,
+    # so replace "Smooth by Angle" modifier with an 'EDGE_SPLIT' modifier with same settings, so here we only need to check 'EDGE_SPLIT' modifiers and restore it on export end
     bcry_split_modifier(object_)
 
     depsgraph = bpy.context.evaluated_depsgraph_get()
@@ -261,36 +263,41 @@ def get_tessfaces(bmesh_):
 def get_custom_normals(bmesh_, use_edge_angle, split_angle):
     float_normals = []
 
+    # Note: Just use Blender auto smooth normals, this works fine with at least blender 4.x
+    # The deprecated(previous) normal calculation code is commented out because it does not work as expected
     for face in bmesh_.faces:
-        if not face.smooth:
-            for vertex in face.verts:
-                float_normals.extend(face.normal.normalized())
-        else:
-            for vertex in face.verts:
-                v_normals = [[face.normal.normalized(), face.calc_area()]]
-                for link_face in vertex.link_faces:
-                    if face.index == link_face.index:
-                        continue
-                    if link_face.smooth:
-                        if not use_edge_angle:
-                            v_normals.append([link_face.normal.normalized(), link_face.calc_area()])
+        for vertex in face.verts:
+            float_normals.extend(vertex.normal.normalized())
 
-                        elif use_edge_angle:
-                            face_angle = face.normal.normalized().dot(link_face.normal.normalized())
-                            face_angle = min(1.0, max(face_angle, -1.0))
-                            face_angle = math.acos(face_angle)
-                            if face_angle < split_angle:
-                                v_normals.append([link_face.normal.normalized(), link_face.calc_area()])
+    # for face in bmesh_.faces:
+    #     if not face.smooth:
+    #         for vertex in face.verts:
+    #             float_normals.extend(face.normal.normalized())
+    #     else:
+    #         for vertex in face.verts:
+    #             v_normals = [[face.normal.normalized(), face.calc_area()]]
+    #             for link_face in vertex.link_faces:
+    #                 if face.index == link_face.index:
+    #                     continue
+    #                 if link_face.smooth:
+    #                     if not use_edge_angle:
+    #                         v_normals.append([link_face.normal.normalized(), link_face.calc_area()])
 
-                smooth_normal = Vector()
-                area_sum = 0
-                for vertex_normal in v_normals:
-                    area_sum += vertex_normal[1]
-                for vertex_normal in v_normals:
-                    if area_sum:
-                        smooth_normal += vertex_normal[0] * \
-                            (vertex_normal[1] / area_sum)
-                float_normals.extend(smooth_normal.normalized())
+    #                     elif use_edge_angle:
+    #                         face_angle = face.normal.normalized().dot(link_face.normal.normalized())
+    #                         face_angle = min(1.0, max(face_angle, -1.0))
+    #                         face_angle = math.acos(face_angle)
+    #                         if face_angle < split_angle:
+    #                             v_normals.append([link_face.normal.normalized(), link_face.calc_area()])
+
+    #             smooth_normal = Vector()
+    #             area_sum = 0
+    #             for vertex_normal in v_normals:
+    #                 area_sum += vertex_normal[1]
+    #             for vertex_normal in v_normals:
+    #                 if area_sum:
+    #                     smooth_normal += vertex_normal[0] * (vertex_normal[1] / area_sum)
+    #             float_normals.extend(smooth_normal.normalized())
 
     return float_normals
 
@@ -298,65 +305,71 @@ def get_custom_normals(bmesh_, use_edge_angle, split_angle):
 def get_normal_array(bmesh_, use_edge_angle, use_edge_sharp, split_angle):
     float_normals = []
 
+    # Note: Just use Blender auto smooth normals, this works fine with at least blender 4.x
+    # The deprecated(previous) normal calculation code is commented out because it does not work as expected
     for face in bmesh_.faces:
-        if not face.smooth:
-            for vertex in face.verts:
-                float_normals.extend(face.normal.normalized())
-        else:
-            for vertex in face.verts:
-                v_normals = [[face.normal.normalized(), face.calc_area()]]
-                for link_face in vertex.link_faces:
-                    if face.index == link_face.index:
-                        continue
-                    if link_face.smooth:
-                        if not use_edge_angle and not use_edge_sharp:
-                            v_normals.append([link_face.normal.normalized(), link_face.calc_area()])
+        for vertex in face.verts:
+            float_normals.extend(vertex.normal.normalized())
 
-                        elif use_edge_angle and not use_edge_sharp:
-                            face_angle = face.normal.normalized().dot(link_face.normal.normalized())
-                            face_angle = min(1.0, max(face_angle, -1.0))
-                            face_angle = math.acos(face_angle)
-                            if face_angle < split_angle:
-                                v_normals.append([link_face.normal.normalized(), link_face.calc_area()])
+    # for face in bmesh_.faces:
+    #     if not face.smooth:
+    #         for vertex in face.verts:
+    #             float_normals.extend(face.normal.normalized())
+    #     else:
+    #         for vertex in face.verts:
+    #             v_normals = [[face.normal.normalized(), face.calc_area()]]
+    #             for link_face in vertex.link_faces:
+    #                 if face.index == link_face.index:
+    #                     continue
+    #                 if link_face.smooth:
+    #                     if not use_edge_angle and not use_edge_sharp:
+    #                         v_normals.append([link_face.normal.normalized(), link_face.calc_area()])
 
-                        elif use_edge_sharp and not use_edge_angle:
-                            is_neighbor_face = False
-                            for edge in vertex.link_edges:
-                                if (edge in face.edges) and (edge in link_face.edges):
-                                    is_neighbor_face = True
-                                    if edge.smooth:
-                                        v_normals.append([link_face.normal.normalized(), link_face.calc_area()])
+    #                     elif use_edge_angle and not use_edge_sharp:
+    #                         face_angle = face.normal.normalized().dot(link_face.normal.normalized())
+    #                         face_angle = min(1.0, max(face_angle, -1.0))
+    #                         face_angle = math.acos(face_angle)
+    #                         if face_angle < split_angle:
+    #                             v_normals.append([link_face.normal.normalized(), link_face.calc_area()])
 
-                            if not is_neighbor_face:
-                                if check_sharp_edges(vertex, face, None, link_face):
-                                    v_normals.append([link_face.normal.normalized(), link_face.calc_area()])
+    #                     elif use_edge_sharp and not use_edge_angle:
+    #                         is_neighbor_face = False
+    #                         for edge in vertex.link_edges:
+    #                             if (edge in face.edges) and (edge in link_face.edges):
+    #                                 is_neighbor_face = True
+    #                                 if edge.smooth:
+    #                                     v_normals.append([link_face.normal.normalized(), link_face.calc_area()])
 
-                        elif use_edge_angle and use_edge_sharp:
-                            face_angle = face.normal.normalized().dot(link_face.normal.normalized())
-                            face_angle = min(1.0, max(face_angle, -1.0))
-                            face_angle = math.acos(face_angle)
-                            if face_angle < split_angle:
-                                is_neighbor_face = False
-                                for edge in vertex.link_edges:
-                                    if (edge in face.edges) and (edge in link_face.edges):
-                                        is_neighbor_face = True
-                                        if edge.smooth:
-                                            v_normals.append([link_face.normal.normalized(), link_face.calc_area()])
-                                            # print(link_face.normal.normalized(), link_face.calc_area())
+    #                         if not is_neighbor_face:
+    #                             if check_sharp_edges(vertex, face, None, link_face):
+    #                                 v_normals.append([link_face.normal.normalized(), link_face.calc_area()])
 
-                                if not is_neighbor_face:
-                                    if check_sharp_edges(vertex, face, None, link_face):
-                                        v_normals.append([link_face.normal.normalized(), link_face.calc_area()])
+    #                     elif use_edge_angle and use_edge_sharp:
+    #                         face_angle = face.normal.normalized().dot(link_face.normal.normalized())
+    #                         face_angle = min(1.0, max(face_angle, -1.0))
+    #                         face_angle = math.acos(face_angle)
+    #                         if face_angle < split_angle:
+    #                             is_neighbor_face = False
+    #                             for edge in vertex.link_edges:
+    #                                 if (edge in face.edges) and (edge in link_face.edges):
+    #                                     is_neighbor_face = True
+    #                                     if edge.smooth:
+    #                                         v_normals.append([link_face.normal.normalized(), link_face.calc_area()])
+    #                                         # print(link_face.normal.normalized(), link_face.calc_area())
 
-                smooth_normal = Vector()
-                area_sum = 0
-                for vertex_normal in v_normals:
-                    area_sum += vertex_normal[1]
-                for vertex_normal in v_normals:
-                    if area_sum:
-                        smooth_normal += vertex_normal[0] * (vertex_normal[1] / area_sum)
-                float_normals.extend(smooth_normal.normalized())
+    #                             if not is_neighbor_face:
+    #                                 if check_sharp_edges(vertex, face, None, link_face):
+    #                                     v_normals.append([link_face.normal.normalized(), link_face.calc_area()])
 
+    #             smooth_normal = Vector()
+    #             area_sum = 0
+    #             for vertex_normal in v_normals:
+    #                 area_sum += vertex_normal[1]
+    #             for vertex_normal in v_normals:
+    #                 if area_sum:
+    #                     smooth_normal += vertex_normal[0] * (vertex_normal[1] / area_sum)
+    #             float_normals.extend(smooth_normal.normalized())
+    
     return float_normals
 
 
@@ -679,6 +692,8 @@ def get_export_nodes(just_selected=False):
             if is_export_node(collection) and len(collection.objects) > 0:
                 export_nodes.append(collection)
 
+    bcPrint(f"Export all nodes amount: {len(export_nodes)}")
+
     return export_nodes
 
 
@@ -745,6 +760,8 @@ def __get_selected_nodes():
         for group in obj.users_collection:
             if is_export_node(group) and group not in export_nodes:
                 export_nodes.append(group)
+
+    bcPrint(f"Selected export nodes amount: {len(export_nodes)}")
 
     return export_nodes
 
