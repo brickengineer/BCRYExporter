@@ -2397,10 +2397,21 @@ class BCRY_OT_add_root_bone(bpy.types.Operator):
         bpy.ops.armature.select_all(action='DESELECT')
         bpy.ops.armature.bone_primitive_add(name=self.root_name)
         root_bone = armature.data.edit_bones[self.root_name]
-        for index in range(0, 32):
-            root_bone.layers[index] = (index == 15)
-
-        armature.data.layers[15] = True
+        root_bone.select = True
+        root_bone.select_head = True
+        root_bone.select_tail = True
+        rootCollectionIndex = -1
+        rootCollectionName = 'bcry_root'
+        for index in range(0, len(root_bone.collections)):
+            collectionName = armature.data.collections_all[index].name
+            bpy.ops.armature.collection_unassign_named(name=collectionName, bone_name=root_bone.name)
+            if(collectionName == rootCollectionName):
+                rootCollectionIndex = index
+        if(rootCollectionIndex == -1):
+            bpy.ops.armature.assign_to_collection(collection_index=-1, new_collection_name=rootCollectionName)
+        else:
+            bpy.ops.armature.assign_to_collection(rootCollectionIndex)
+        armature.data.collections_all[rootCollectionName].is_visible = True
 
         root_bone.head.zero()
         root_bone.tail.zero()
@@ -2525,10 +2536,22 @@ class BCRY_OT_add_locator_locomotion(bpy.types.Operator):
         bpy.ops.armature.select_all(action='DESELECT')
         bpy.ops.armature.bone_primitive_add(name='Locator_Locomotion')
         locator_bone = armature.data.edit_bones['Locator_Locomotion']
-        for index in range(0, 32):
-            locator_bone.layers[index] = (index == 14)
+        locator_bone.select = True
+        locator_bone.select_head = True
+        locator_bone.select_tail = True
+        rootCollectionIndex = -1
+        rootCollectionName = 'bcry_root'
+        for index in range(0, len(locator_bone.collections)):
+            collectionName = armature.data.collections_all[index].name
+            bpy.ops.armature.collection_unassign_named(name=collectionName, bone_name=locator_bone.name)
+            if(collectionName == rootCollectionName):
+                rootCollectionIndex = index
+        if(rootCollectionIndex == -1):
+            bpy.ops.armature.assign_to_collection(collection_index=-1, new_collection_name=rootCollectionName)
+        else:
+            bpy.ops.armature.assign_to_collection(rootCollectionIndex)
+        armature.data.collections_all[rootCollectionName].is_visible = True
 
-        armature.data.layers[14] = True
 
         # Edit locator bone
         locator_bone.parent = armature.data.edit_bones[self.root_bone]

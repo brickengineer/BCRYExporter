@@ -8,7 +8,7 @@
 <H1>Installation:</H1>
 
 Copy `io_bcry_exporter` folder to `<BLENDER PATH>\scripts\addons` directory.<br>
-<b>Example:</b> `C:\Users\<YOUR USER NAME>\AppData\Roaming\Blender Foundation\Blender\4.2\scripts\addons`
+<b>Example:</b> `C:\Users\<YOUR USER NAME>\AppData\Roaming\Blender Foundation\Blender\4.3\scripts\addons`
 
 <H1>(NOT CONFIRMED INFO) Known issues/limitation:</H1>
 

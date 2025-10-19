@@ -240,8 +240,10 @@ class CrytekDaeExporter:
         mesh_node.appendChild(source)
 
     def _write_normals(self, object_, bmesh_, mesh_node, geometry_name):
-        split_angle = 0
+        # If true, will split if angle > split angle
         use_edge_angle = False
+        split_angle = 0
+        # If true, will respect edges marked as sharp
         use_edge_sharp = False
 
         has_smooth_by_angle_modfier = False
@@ -264,11 +266,9 @@ class CrytekDaeExporter:
 
         float_normals = None
         if self._config.custom_normals:
-            float_normals = utils.get_custom_normals(bmesh_, use_edge_angle,
-                                                     split_angle)
+            float_normals = utils.get_custom_normals(bmesh_, use_edge_angle, split_angle)
         else:
-            float_normals = utils.get_normal_array(bmesh_, use_edge_angle,
-                                                   use_edge_sharp, split_angle)
+            float_normals = utils.get_normal_array(bmesh_, use_edge_angle, use_edge_sharp, split_angle)
 
         id_ = "{!s}-normal".format(geometry_name)
         source = utils.write_source(id_, "float", float_normals, "XYZ")
@@ -307,6 +307,10 @@ class CrytekDaeExporter:
                     float_colors.extend([1.0, 1.0, 1.0, alpha_color])
             else:
                 for vert in bmesh_.verts:
+                    # Warning and skip loose verts
+                    if( len(vert.link_loops) == 0 ):
+                        bcPrint(f"Error: vert {vert.index} has no link_loops! Clean mesh (CleanUp/DeleteLoose) and try again!", 'error')
+                        continue
                     loop = vert.link_loops[0]
                     color = loop[active_layer]
                     float_colors.extend([color[0], color[1], color[2]])

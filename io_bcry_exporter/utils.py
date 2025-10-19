@@ -1416,16 +1416,16 @@ def get_armature_from_node(group):
 
 def activate_all_bone_layers(armature):
     layers = []
-    for index in range(0, 32):
-        layers.append(armature.data.layers[index])
-        armature.data.layers[index] = True
+    for index in range(0, len(armature.data.collections_all)):
+        layers.append(armature.data.collections_all[index].is_visible)
+        armature.data.collections_all[index].is_visible = True
 
     return layers
 
 
 def recover_bone_layers(armature, layers):
-    for index in range(0, 32):
-        armature.data.layers[index] = layers[index]
+    for index in range(0, len(armature.data.collections_all)):
+        armature.data.collections_all[index].is_visible = layers[index]
 
 
 # ------------------------------------------------------------------------------
