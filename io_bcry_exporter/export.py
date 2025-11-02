@@ -108,13 +108,11 @@ class CrytekDaeExporter:
         author_name = self._doc.createTextNode('Blender User')
         author.appendChild(author_name)
         author_tool = self._doc.createElement('authoring_tool')
-        author_name_text = self._doc.createTextNode(
-            'BCry v{}'.format(self._config.bcry_version))
+        author_name_text = self._doc.createTextNode('BCry v{}'.format(self._config.bcry_version))
         author_tool.appendChild(author_name_text)
         contributor.appendChild(author_tool)
         created = self._doc.createElement('created')
-        created_value = self._doc.createTextNode(
-            datetime.now().isoformat(' '))
+        created_value = self._doc.createTextNode(datetime.now().isoformat(' '))
         created.appendChild(created_value)
         asset.appendChild(created)
         modified = self._doc.createElement('modified')
@@ -127,6 +125,10 @@ class CrytekDaeExporter:
         z_up = self._doc.createTextNode('Z_UP')
         up_axis.appendChild(z_up)
         asset.appendChild(up_axis)
+        # Write scene frame rate to metadata, so CryEngine Resource Compiler can read it
+        scene_framerate = self._doc.createElement('scene_frame_rate')
+        scene_framerate.setAttribute('samples_per_second', '{:f}'.format(bpy.context.scene.render.fps / bpy.context.scene.render.fps_base))
+        asset.appendChild(scene_framerate)
 
     # ------------------------------------------------------------------
     # Library Cameras:

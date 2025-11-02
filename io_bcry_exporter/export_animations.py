@@ -90,14 +90,12 @@ class CrytekDaeAnimationExporter(export.CrytekDaeExporter):
                 print('')
                 bcPrint(group.name)
                 bcPrint("Animation is being preparing to process.")
-                bcPrint("Animation frame range are [{} - {}]".format(
-                    frame_start, frame_end))
+                bcPrint("Animation frame range are [{} - {}]".format(frame_start, frame_end))
 
                 if node_type == 'i_caf':
                     utils.add_fakebones(group)
                 try:
-                    self._export_library_animation_clips_and_animations(
-                        libanmcl, libanm, group)
+                    self._export_library_animation_clips_and_animations(libanmcl, libanm, group)
                     self._export_library_visual_scenes(visual_scene, group)
                 except RuntimeError:
                     pass
@@ -133,10 +131,8 @@ class CrytekDaeAnimationExporter(export.CrytekDaeExporter):
 
         animation_clip = self._doc.createElement("animation_clip")
         animation_clip.setAttribute("id", anim_id)
-        animation_clip.setAttribute("start", "{:f}".format(
-            utils.frame_to_time(scene.frame_start)))
-        animation_clip.setAttribute("end", "{:f}".format(
-            utils.frame_to_time(scene.frame_end)))
+        animation_clip.setAttribute("start", "{:f}".format(utils.frame_to_time(scene.frame_start)))
+        animation_clip.setAttribute("end", "{:f}".format(utils.frame_to_time(scene.frame_end)))
         is_animation = False
 
         for object_ in group.objects:
@@ -149,19 +145,16 @@ class CrytekDaeAnimationExporter(export.CrytekDaeExporter):
                 bone_name = "{!s}{!s}".format(object_.name, props_name)
 
                 for axis in iter(AXES):
-                    animation = self._get_animation_location(
-                        object_, bone_name, axis, anim_id)
+                    animation = self._get_animation_location(object_, bone_name, axis, anim_id)
                     if animation is not None:
                         libanm.appendChild(animation)
 
                 for axis in iter(AXES):
-                    animation = self._get_animation_rotation(
-                        object_, bone_name, axis, anim_id)
+                    animation = self._get_animation_rotation(object_, bone_name, axis, anim_id)
                     if animation is not None:
                         libanm.appendChild(animation)
 
-                self._export_instance_animation_parameters(
-                    object_, animation_clip, anim_id)
+                self._export_instance_animation_parameters(object_, animation_clip, anim_id)
 
         if is_animation:
             libanmcl.appendChild(animation_clip)
