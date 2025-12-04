@@ -1487,14 +1487,14 @@ class BCRY_OT_edit_inverse_kinematics(bpy.types.Operator):
     bone = None
 
     def invoke(self, context, event):
-        if (context.object is None or context.object.type != "ARMATURE" or
-                context.object.mode != "POSE" or self.bone is None):
+        if (context.object is None or context.object.type != "ARMATURE" or context.object.mode != "POSE"):
             self.report({'ERROR'}, "Please select a bone in POSE mode!")
             return {'CANCELLED'}
 
         if bpy.context.active_pose_bone:
             self.bone = bpy.context.active_pose_bone
         else:
+            self.report({'ERROR'}, "Please select a bone in POSE mode!")
             return {'CANCELLED'}
 
         if 'phys_proxy' in self.bone:
