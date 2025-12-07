@@ -3113,6 +3113,16 @@ class BCRY_OT_export(bpy.types.Operator, ExportHelper):
         description="Use custom normals.",
         default=False
     )
+    use_f32_vertex_format: BoolProperty(
+        name="Use F32 Vertex Format",
+        description="Use F32 vertex format instead of default F16. (For more precise vertex positions when far from pivot. Also can be used for morphs(shape keys))",
+        default=False
+    )
+    eight_weights_per_vertex: BoolProperty(
+        name="8 Weights Per Vertex",
+        description="Force Use 8 weights per vertex instead of default 4. (CryEngine can auto detect up to 8 weights when necessary even if this is not set.)",
+        default=False
+    )
     vcloth_pre_process: BoolProperty(
         name="VCloth Pre-Process",
         description="Export skin as simulating mesh for VCloth V2.",
@@ -3185,6 +3195,8 @@ class BCRY_OT_export(bpy.types.Operator, ExportHelper):
                 'merge_all_nodes',
                 'export_selected_nodes',
                 'custom_normals',
+                'use_f32_vertex_format',
+                'eight_weights_per_vertex',
                 'vcloth_pre_process',
                 'generate_materials',
                 'convert_textures',
@@ -3248,6 +3260,8 @@ class BCRY_OT_export(bpy.types.Operator, ExportHelper):
         box.prop(self, "merge_all_nodes")
         box.prop(self, "export_selected_nodes")
         box.prop(self, "custom_normals")
+        box.prop(self, "use_f32_vertex_format")
+        box.prop(self, "eight_weights_per_vertex")
         box.prop(self, "vcloth_pre_process")
 
         box = col.box()
@@ -3411,6 +3425,16 @@ class BCRY_OT_quick_export(bpy.types.Operator, ExportHelper):
         description="Use custom normals.",
         default=False
     )
+    use_f32_vertex_format: BoolProperty(
+        name="Use F32 Vertex Format",
+        description="Use F32 vertex format instead of default F16. (For more precise vertex positions when far from pivot. Also can be used for morphs(shape keys))",
+        default=False
+    )
+    eight_weights_per_vertex: BoolProperty(
+        name="8 Weights Per Vertex",
+        description="Force Use 8 weights per vertex instead of default 4. (CryEngine can auto detect up to 8 weights when necessary even if this is not set.)",
+        default=False
+    )
     vcloth_pre_process: BoolProperty(
         name="VCloth Pre-Process",
         description="Export skin as simulating mesh for VCloth V2.",
@@ -3483,6 +3507,8 @@ class BCRY_OT_quick_export(bpy.types.Operator, ExportHelper):
                 'merge_all_nodes',
                 'export_selected_nodes',
                 'custom_normals',
+                'use_f32_vertex_format',
+                'eight_weights_per_vertex',
                 'vcloth_pre_process',
                 'generate_materials',
                 'convert_textures',
@@ -3547,6 +3573,8 @@ class BCRY_OT_quick_export(bpy.types.Operator, ExportHelper):
         box.prop(self, "merge_all_nodes")
         box.prop(self, "export_selected_nodes")
         box.prop(self, "custom_normals")
+        box.prop(self, "use_f32_vertex_format")
+        box.prop(self, "eight_weights_per_vertex")
         box.prop(self, "vcloth_pre_process")
 
         box = col.box()

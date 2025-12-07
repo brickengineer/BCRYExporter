@@ -693,6 +693,9 @@ def get_export_nodes(just_selected=False):
                 export_nodes.append(collection)
 
     bcPrint(f"Export all nodes amount: {len(export_nodes)}")
+    bcPrint("Export nodes:")
+    for node in export_nodes:
+        bcPrint(f" - {node.name}")
 
     return export_nodes
 
@@ -1236,11 +1239,25 @@ def find_cga_node_from_anm_node(anm_group):
 # ------------------------------------------------------------------------------
 
 def is_lod_geometry(object_):
-    return object_.name[:-1].endswith('_LOD')
+    if object_.name[:-1].endswith('_LOD'):
+        # NEVER regard as LOD if is chr or skin node
+        for group in object_.users_collection:
+            if get_node_type(group) in ('chr', 'skin'):
+                return False
+        return True
+    return False
 
 
 def is_has_lod(object_):
-    return ("{}_LOD1".format(object_.name) in bpy.data.objects)
+    # NEVER regard as LOD if is chr or skin node
+    for group in object_.users_collection:
+        if get_node_type(group) in ('chr', 'skin'):
+            return False
+    lod_base_name = "{}_LOD".format(object_.name)
+    for obj in bpy.data.objects:
+        if obj.name.startswith(lod_base_name):
+            return True
+    return False
 
 
 def changed_lod_name(lod_name):

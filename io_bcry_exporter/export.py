@@ -909,6 +909,14 @@ class CrytekDaeExporter:
             prop = self._doc.createTextNode("UseCustomNormals")
             properties.appendChild(prop)
 
+            if self._config.use_f32_vertex_format:
+                prop = self._doc.createTextNode("UseF32VertexFormat")
+                properties.appendChild(prop)
+
+            if self._config.eight_weights_per_vertex:
+                prop = self._doc.createTextNode("EightWeightsPerVertex")
+                properties.appendChild(prop)
+
             if self._config.vcloth_pre_process and node_type == 'skin':
                 prop = self._doc.createTextNode("VClothPreProcess")
                 properties.appendChild(prop)
