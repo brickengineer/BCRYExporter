@@ -906,8 +906,9 @@ class CrytekDaeExporter:
                 prop = self._doc.createTextNode("DoNotMerge")
                 properties.appendChild(prop)
 
-            prop = self._doc.createTextNode("UseCustomNormals")
-            properties.appendChild(prop)
+            if self._config.custom_normals:
+                prop = self._doc.createTextNode("UseCustomNormals")
+                properties.appendChild(prop)
 
             if self._config.use_f32_vertex_format:
                 prop = self._doc.createTextNode("UseF32VertexFormat")

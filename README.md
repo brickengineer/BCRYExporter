@@ -22,6 +22,7 @@ Copy `io_bcry_exporter` folder to `<BLENDER PATH>\scripts\addons` directory.<br>
 * [Animation] Support animation frame rate write into metadata during export. (Note: This does not mean you can play 60 fps animation in CryEngine. To support 60 fps aniamtions, you need to modify the engine and RC accordingly.)
 * [Utils] Fixed 'Add Root Bone' utility function
 * [Physics] Fixed false alarm of "Please select a bone in POSE mode!" when use 'Edit Bone Physics and IKs"
+* [General] Fixed Use Custom Normals export option is always true no matter if it is checked. Note: Usually should be checked
 ### 1.2.0
 * [UI] Removed obslete UI functions when update from blender 2.79 to 2.8
 * [Material] Improved all material utility functions and fixed some errors

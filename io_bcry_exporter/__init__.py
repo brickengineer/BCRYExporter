@@ -3110,8 +3110,8 @@ class BCRY_OT_export(bpy.types.Operator, ExportHelper):
     )
     custom_normals: BoolProperty(
         name="Use Custom Normals",
-        description="Use custom normals.",
-        default=False
+        description="Use custom normals. Usually TRUE otherwise RC will auto generate and probably differ from Blender normals.",
+        default=True
     )
     use_f32_vertex_format: BoolProperty(
         name="Use F32 Vertex Format",
@@ -3422,8 +3422,8 @@ class BCRY_OT_quick_export(bpy.types.Operator, ExportHelper):
     )
     custom_normals: BoolProperty(
         name="Use Custom Normals",
-        description="Use custom normals.",
-        default=False
+        description="Use custom normals. Usually TRUE otherwise RC will auto generate and probably differ from Blender normals.",
+        default=True
     )
     use_f32_vertex_format: BoolProperty(
         name="Use F32 Vertex Format",
