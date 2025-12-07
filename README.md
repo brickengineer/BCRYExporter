@@ -16,6 +16,9 @@ Copy `io_bcry_exporter` folder to `<BLENDER PATH>\scripts\addons` directory.<br>
 
 ## Update History
 ### 1.3.0
+* [Character] Support character skin mesh LODs export. (Just export with seperate export node with suffix 'LOD#')
+* [General] Support F32 vertex format
+* [General] Support force 8 weights
 * [Animation] Support animation frame rate write into metadata during export. (Note: This does not mean you can play 60 fps animation in CryEngine. To support 60 fps aniamtions, you need to modify the engine and RC accordingly.)
 * [Utils] Fixed 'Add Root Bone' utility function
 * [Physics] Fixed false alarm of "Please select a bone in POSE mode!" when use 'Edit Bone Physics and IKs"
