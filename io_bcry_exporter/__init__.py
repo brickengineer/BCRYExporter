@@ -2506,58 +2506,45 @@ class BCRY_OT_add_primitive_mesh(bpy.types.Operator):
         armature = bpy.context.active_object
         if not armature or armature.type != 'ARMATURE':
             self.report({'ERROR'}, "Please select a armature object!")
-            return {'FINISHED'}
+            return {'CANCELLED'}
 
-        x = bpy.context.view_layer.layer_collection
-        bpy.context.view_layer.active_layer_collection = x
-
-        bpy.ops.mesh.primitive_plane_add()
-        triangle = bpy.context.active_object
 
         bm = bmesh.new()
         bm.verts.new((1.0, 1.0, 0.0))
         bm.verts.new((-1.0, -1.0, 0.0))
         bm.verts.new((1.0, -1.0, 0.0))
-
         bm.faces.new(bm.verts)
-        bm.to_mesh(triangle.data)
-        triangle.name = 'No_Draw'
-        triangle.data.name = 'No_Draw'
 
-        bpy.ops.object.mode_set(mode='EDIT')
-        bpy.ops.mesh.select_all()
-        bpy.ops.object.vertex_group_assign_new()
-        triangle.vertex_groups[0].name = self.root_bone
-        bpy.ops.object.mode_set(mode='OBJECT')
+        mesh_data = bpy.data.meshes.new('No_Draw')
+        bm.to_mesh(mesh_data)
+        bm.free()
+        mesh_data.update()
+        triangle = bpy.data.objects.new('No_Draw', mesh_data)
 
-        bpy.ops.object.modifier_add(type='ARMATURE')
-        triangle.modifiers['Armature'].object = armature
-
-        triangle.parent = armature
-
-        material_ = None
-        mat_name = "{}__01__No_Draw__physProxyNoDraw".format(armature.name)
-
-        if mat_name in bpy.data.materials:
-            material_ = bpy.data.materials[mat_name]
-        else:
-            material_ = bpy.data.materials.new(mat_name)
-
-        if triangle.material_slots:
-            triangle.material_slots[0].material = material_
-        else:
-            bpy.ops.object.material_slot_add()
-            if triangle.material_slots:
-                triangle.material_slots[0].material = material_
-
-        if len(triangle.users_collection) > 0:
-            for c in triangle.users_collection:
-                c.objects.unlink(triangle)
-
+        target_collection = None
         for c in armature.users_collection:
             if not utils.is_export_node(c):
-                c.objects.link(triangle)
-                break
+                target_collection = c
+                break            
+        if not target_collection:
+            target_collection = context.collection        
+        target_collection.objects.link(triangle)
+
+        vg = triangle.vertex_groups.new(name=self.root_bone)
+        vg.add([0, 1, 2], 1.0, 'REPLACE')
+
+        mod = triangle.modifiers.new(name="Armature", type='ARMATURE')
+        mod.object = armature
+        triangle.parent = armature
+
+        mat_name = f"{armature.name}__01__No_Draw__physProxyNoDraw"
+        material_ = bpy.data.materials.get(mat_name)
+        if not material_:
+            material_ = bpy.data.materials.new(mat_name)        
+        triangle.data.materials.append(material_)
+
+        context.view_layer.objects.active = triangle
+        triangle.select_set(True)
 
         utils.set_active(triangle)
 
