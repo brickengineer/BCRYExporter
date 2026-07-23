@@ -2072,7 +2072,7 @@ class BCRY_OT_find_weightless(bpy.types.Operator):
 
         object_ = bpy.context.active_object
         if object_.parent is None or object_.parent.type != 'ARMATURE':
-            self.report({'ERROR'}, "Please select a mesh in OBJECT mode.")
+            self.report({'ERROR'}, "Selected mesh is not parented to an armature.")
             return None
 
         armature = object_.parent
@@ -2121,7 +2121,7 @@ class BCRY_OT_find_weightless(bpy.types.Operator):
             return {'FINISHED'}
         object_ = context.object
         if object_.parent is None or object_.parent.type != 'ARMATURE':
-            self.report({'ERROR'}, "Please select a mesh in OBJECT mode.")
+            self.report({'ERROR'}, "Selected mesh is not parented to an armature.")
             return {'FINISHED'}
 
         return context.window_manager.invoke_props_dialog(self)
