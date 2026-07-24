@@ -2330,7 +2330,7 @@ class BCRY_OT_add_locator_locomotion(bpy.types.Operator):
     )
 
     bone_length: FloatProperty(name="Bone Length", default=0.5, description=desc.list['locator_length'])
-    root_bone: StringProperty(name="Root Bone", default="Root", description=desc.list['locator_root'])
+    root_bone: StringProperty(name="Root Bone", default="Bip01", description=desc.list['locator_root'])
     movement_bone: StringProperty(name="Movement Bone", default="Bip01__Pelvis", description=desc.list['locator_move'])
 
     x_axis: BoolProperty(
@@ -2379,7 +2379,14 @@ class BCRY_OT_add_locator_locomotion(bpy.types.Operator):
 
         root_bone = utils.get_root_bone(armature)
         self.root_bone = root_bone.name
-        self.movement_bone = root_bone.children[0].name
+        defaultMovBoneNameFound = False
+        for child in root_bone.children:
+            if "pelvis" in child.name.lower() or "hips" in child.name.lower():
+                self.movement_bone = child.name
+                defaultMovBoneNameFound = True
+                break
+        if not defaultMovBoneNameFound:
+            self.movement_bone = root_bone.children[0].name
         return context.window_manager.invoke_props_dialog(self)
 
     def execute(self, context):
@@ -2445,14 +2452,14 @@ class BCRY_OT_add_locator_locomotion(bpy.types.Operator):
         copy_location.use_z = self.z_axis
         copy_location.use_offset = True
 
-        # Create offset key frame for locator
-        if self.x_axis:
-            locator_pose_bone.location[0] = -1 * movement_bone.head.x
-        if self.y_axis:
-            locator_pose_bone.location[1] = -1 * movement_bone.head.y
-        if self.z_axis:
-            locator_pose_bone.location[2] = -1 * movement_bone.head.z
-        locator_pose_bone.keyframe_insert('location', frame=1)
+        # # Create offset key frame for locator
+        # if self.x_axis:
+        #     locator_pose_bone.location[0] = -1 * movement_bone.head.x
+        # if self.y_axis:
+        #     locator_pose_bone.location[1] = -1 * movement_bone.head.y
+        # if self.z_axis:
+        #     locator_pose_bone.location[2] = -1 * movement_bone.head.z
+        # locator_pose_bone.keyframe_insert('location', frame=1)
 
         # Ensure all bones same inheritance level as movement bone copy locator's location and rotation
         for child in locator_pose_bone.parent.children:
