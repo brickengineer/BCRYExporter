@@ -640,8 +640,7 @@ class BCRY_OT_generate_lods(bpy.types.Operator):
         lod = bpy.context.active_object
         lod.location.x += self.view_offset
 
-        bpy.ops.object.modifier_add(type='DECIMATE')
-        decimate = lod.modifiers[len(lod.modifiers) - 1]
+        decimate = lod.modifiers.new(name="Decimate", type='DECIMATE')
         decimate.ratio = self.decimate_ratio
 
         lod_name = "{}_LOD1".format(object_.name)
@@ -654,7 +653,10 @@ class BCRY_OT_generate_lods(bpy.types.Operator):
             lod = bpy.context.active_object
             lod.location.x += self.view_offset
 
-            decimate = lod.modifiers[len(lod.modifiers) - 1]
+            decimate = next(
+                modifier for modifier in lod.modifiers
+                if modifier.type == 'DECIMATE'
+            )
 
             decimate.ratio = self.decimate_ratio / math.pow(2, index)
 

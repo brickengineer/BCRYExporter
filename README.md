@@ -17,6 +17,9 @@ Copy `io_bcry_exporter` folder to `<BLENDER PATH>\scripts\addons` directory.<br>
 ## Update History
 ### 1.3.1
 * [Character] Add Primitive Mesh character utility. Fixed created primitive mesh (triangle) become orphaned if selected armature's all collection belongs to is Non exportable node collection.
+* [Animation] Improved locomotion locator auto find movement bone name.
+* [Animation] Fixed locomotion locator auto initial key frame offset
+* [Mesh] Fixed Generate LOD errors: AttributeError: 'NodesModifier' object has no attribute 'ratio'
 ### 1.3.0
 * [Character] Support character skin mesh LODs export. (Just export with seperate export node with suffix 'LOD#')
 * [General] Support F32 vertex format
