@@ -64,7 +64,8 @@ def generate_mtl_files(_config, materials=None):
             material_node = _doc.createElement('Material')
 
             set_material_attributes(material, material_name, material_node)
-            add_textures(_doc, material, material_node, _config)
+            if _config.include_material_textures:
+                add_textures(_doc, material, material_node, _config)
             set_public_params(_doc, material, material_node)
 
             sub_material.appendChild(material_node)

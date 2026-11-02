@@ -1355,6 +1355,11 @@ class BCRY_OT_generate_materials(bpy.types.Operator, ExportHelper):
         description="Generate material files just for selected nodes.",
         default=False
     )
+    include_material_textures: BoolProperty(
+        name="Include Material Textures",
+        description="Include texture references in generated .mtl files.",
+        default=False
+    )
     convert_textures: BoolProperty(
         name="Convert Textures",
         description="Converts source textures to DDS while generating materials.",
@@ -1370,6 +1375,7 @@ class BCRY_OT_generate_materials(bpy.types.Operator, ExportHelper):
             attributes = (
                 'filepath',
                 'export_selected_nodes',
+                'include_material_textures',
                 'convert_textures'
             )
 
@@ -1413,6 +1419,7 @@ class BCRY_OT_generate_materials(bpy.types.Operator, ExportHelper):
         box = col.box()
         box.label(text="Generate Materials", icon="MATERIAL")
         box.prop(self, "export_selected_nodes")
+        box.prop(self, "include_material_textures")
         box.prop(self, "convert_textures")
 
 
@@ -3129,6 +3136,11 @@ class BCRY_OT_export(bpy.types.Operator, ExportHelper):
         description="Generate material files for CryEngine.",
         default=False
     )
+    include_material_textures: BoolProperty(
+        name="Include Material Textures",
+        description="Include texture references in generated .mtl files.",
+        default=False
+    )
     convert_textures: BoolProperty(
         name="Convert Textures",
         description="Converts source textures to DDS while exporting materials.",
@@ -3195,6 +3207,7 @@ class BCRY_OT_export(bpy.types.Operator, ExportHelper):
                 'eight_weights_per_vertex',
                 'vcloth_pre_process',
                 'generate_materials',
+                'include_material_textures',
                 'convert_textures',
                 'make_chrparams',
                 'make_cdf',
@@ -3263,6 +3276,9 @@ class BCRY_OT_export(bpy.types.Operator, ExportHelper):
         box = col.box()
         box.label(text="Material & Texture", icon="TEXTURE")
         box.prop(self, "generate_materials")
+        row = box.row()
+        row.enabled = self.generate_materials
+        row.prop(self, "include_material_textures")
         box.prop(self, "convert_textures")
 
         box = col.box()
@@ -3441,6 +3457,11 @@ class BCRY_OT_quick_export(bpy.types.Operator, ExportHelper):
         description="Generate material files for CryEngine.",
         default=False
     )
+    include_material_textures: BoolProperty(
+        name="Include Material Textures",
+        description="Include texture references in generated .mtl files.",
+        default=False
+    )
     convert_textures: BoolProperty(
         name="Convert Textures",
         description="Converts source textures to DDS while exporting materials.",
@@ -3507,6 +3528,7 @@ class BCRY_OT_quick_export(bpy.types.Operator, ExportHelper):
                 'eight_weights_per_vertex',
                 'vcloth_pre_process',
                 'generate_materials',
+                'include_material_textures',
                 'convert_textures',
                 'make_chrparams',
                 'make_cdf',
@@ -3576,6 +3598,9 @@ class BCRY_OT_quick_export(bpy.types.Operator, ExportHelper):
         box = col.box()
         box.label(text="Material & Texture", icon="TEXTURE")
         box.prop(self, "generate_materials")
+        row = box.row()
+        row.enabled = self.generate_materials
+        row.prop(self, "include_material_textures")
         box.prop(self, "convert_textures")
 
         box = col.box()

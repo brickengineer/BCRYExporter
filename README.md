@@ -15,6 +15,10 @@ Copy `io_bcry_exporter` folder to `<BLENDER PATH>\scripts\addons` directory.<br>
 * Initial author: AFCStudio, https://github.com/AFCStudio/BCRYExporter
 
 ## Update History
+### pending updates
+#### [Material] Independent material texture export option
+* Add `Include Material Textures`, disabled by default, to Export, Quick Export, and Generate Materials.
+
 ### 1.3.1
 * [Character] Add Primitive Mesh character utility. Fixed created primitive mesh (triangle) become orphaned if selected armature's all collection belongs to is Non exportable node collection.
 * [Animation] Improved locomotion locator auto find movement bone name.

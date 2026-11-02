@@ -6,3 +6,5 @@
 *.code-workspace
 *.blend1
 .vs
+_temp_codex/
+AGENTS.md
