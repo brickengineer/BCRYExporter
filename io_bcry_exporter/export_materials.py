@@ -44,13 +44,14 @@ class CrytekMaterialExporter:
         material_utils.generate_mtl_files(self._config, self._materials)
 
     def get_materials_for_object(self, object_):
-        materials = OrderedDict()
-        for material_name, material in self._materials.items():
-            for object_material in object_.data.materials:
-                if material.name == object_material.name:
-                    materials[material] = material_name
+        return OrderedDict(self.get_material_slots_for_object(object_).values())
 
-        return materials
+    def get_material_slots_for_object(self, object_):
+        names = {material: name for name, material in self._materials.items()}
+        return OrderedDict(
+            (index, (slot.material, names[slot.material]))
+            for index, slot in enumerate(object_.material_slots)
+            if slot.material is not None and slot.material in names)
 
 
     # ------------------------------------------------------------------------------
@@ -58,14 +59,10 @@ class CrytekMaterialExporter:
     # ------------------------------------------------------------------------------
 
     def export_library_images(self, library_images):
-        images = []
-        for node in utils.get_export_nodes():
-            for material in self._materials:
-                for image in material_utils.get_textures(material):
-                    if image:
-                        images.append(image)
-
-        self._write_texture_nodes(list(set(images)), library_images)
+        images = dict.fromkeys(
+            image for material in self._materials.values()
+            for image in material_utils.get_textures(material) if image)
+        self._write_texture_nodes(list(images), library_images)
 
     def _write_texture_nodes(self, images, library_images):
         for image in images:

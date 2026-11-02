@@ -16,8 +16,24 @@ Copy `io_bcry_exporter` folder to `<BLENDER PATH>\scripts\addons` directory.<br>
 
 ## Update History
 ### pending updates
-#### [Material] Independent material texture export option
-* Add `Include Material Textures`, disabled by default, to Export, Quick Export, and Generate Materials.
+### 1.4
+#### [Character]
+* Fixed failure to export skin node if check "export selected only". (_Keep skeleton export helpers separate per armature and preserve the selected export nodes while creating them._)
+* Check Resource Compiler exit codes and wait for character/skin second-pass compilation; propagate conversion failures as cancelled exports.
+* Remove the experimental `Rebuild Armature` tool and its bone, vertex-group, and action rewriting logic; the historical Known issues #2 rebuild workaround is no longer available.
+#### [Model]
+* Fixed custom normal export. (_Preserve custom corner normals and color seams, including active BYTE/FLOAT and POINT/CORNER color attributes._)
+#### [Material]
+* Preserve material slot indices, including repeated and object-linked materials; reject faces using missing materials before writing output.
+* Add seperate `Include Material Textures` option. (_Disabled by default, to Export, Quick Export, and Generate Materials. This can prevent texture path false alarm/error when export to a different disk but blend has textures (in different paths) assigned to mesh materials._)
+#### [General]
+* Preserve unrelated selected objects when clearing skeleton physics, and keep existing objects untouched when export helper names collide.
+* Restore scene mode, pose, frame/subframe, selection, bone visibility, and original smoothing modifiers after successful or failed exports.
+* Include COLLADA image definitions and recognize node textures in both Cycles and EEVEE.
+* Honor `Save TIFFs`, preserve source images and existing TIFFs, skip absent/duplicate textures, and apply normal-map green inversion to the actual compiler input.
+* Run DAE and texture conversion synchronously on Blender's main thread instead of background Python threads; export operators finish after conversion, and the UI may pause during compilation.
+* Fix UDP property editing, weight normalization, single-material physics colors, animation channel references, rotation transform targets, and rotation tangent units.
+* Remove obsolete `Rebuild Armature` functionality.
 
 ### 1.3.1
 * [Character] Add Primitive Mesh character utility. Fixed created primitive mesh (triangle) become orphaned if selected armature's all collection belongs to is Non exportable node collection.
@@ -44,11 +60,3 @@ Copy `io_bcry_exporter` folder to `<BLENDER PATH>\scripts\addons` directory.<br>
 ### 0.9.0
 * Supports Blender 4.4
 * Fixed possible error during temp replacing smooth by angle modifier (geom node) by edge split on export and restore after done
-
-# Known issues/limitation:
-## Confirmed
-1) Failed to export skin node if check "export selected only"
-## NOT Confirmed INFO
-<b>NOTE: The following description is not up tp date so not confirmed yet</b>
-1) There is no way to set active any collection, so be careful that current active collection be unhide and not disable. Otherwise you can expect Error that Object is Null. I put in some operators code which set Master collection(Scene Collection) active.
-2) In some cases when you modify the armature as add bones through edit_bones.new() method or other way BCRYExporter will be export armature with broken bones hierarchy. I think that is Blender bug because I nothing changed in export code except fix errors with Bmesh convertation. <br> <b>Solution:</b> I added a button in Bone utilities: Rebuild-armature. It rebuild selected armature from zero and copy all bones parameters: name, matrix, roll, parent, some properties and custom properties then delete old bones. It don't copy bone constraints at the moment.<br> <b>IMPORTANT:</b> vertex groups renames too, but only if the object is a children of this armature. Do skin object a child of armature before use this button.

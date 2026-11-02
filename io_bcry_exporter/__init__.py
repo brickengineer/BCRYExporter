@@ -1396,8 +1396,8 @@ class BCRY_OT_generate_materials(bpy.types.Operator, ExportHelper):
 
         except exceptions.BCryException as exception:
             bcPrint(exception.what(), 'error')
-            bpy.ops.bcry.display_error(
-                'INVOKE_DEFAULT', message=exception.what())
+            self.report({'ERROR'}, exception.what())
+            return {'CANCELLED'}
 
         return {'FINISHED'}
 
@@ -1609,6 +1609,7 @@ class BCRY_OT_edit_physic_proxy(bpy.types.Operator):
     object_ = None
 
     def invoke(self, context, event):
+        self.object_ = context.active_object
         if self.object_ is None or self.object_.type not in ('MESH', 'EMPTY'):
             self.report({'ERROR'}, "Please select a mesh or empty object.")
             return {'CANCELLED'}
@@ -1626,8 +1627,10 @@ class BCRY_OT_edit_physic_proxy(bpy.types.Operator):
 
     def execute(self, context):
         if self.object_ is None:
-            bcPrint("Please select a object.")
-            return {'FINISHED'}
+            self.object_ = context.active_object
+        if self.object_ is None or self.object_.type not in ('MESH', 'EMPTY'):
+            self.report({'ERROR'}, "Please select a mesh or empty object.")
+            return {'CANCELLED'}
 
         udp.edit_udp(
             self.object_,
@@ -1695,8 +1698,10 @@ class BCRY_OT_edit_render_mesh(bpy.types.Operator):
 
     def execute(self, context):
         if self.object_ is None:
-            bcPrint("Please select a object.")
-            return {'FINISHED'}
+            self.object_ = context.active_object
+        if self.object_ is None or self.object_.type not in ('MESH', 'EMPTY'):
+            self.report({'ERROR'}, "Please select a mesh or empty object.")
+            return {'CANCELLED'}
 
         udp.edit_udp(self.object_, "entity", "entity", self.is_entity)
         udp.edit_udp(self.object_, "mass", self.mass, self.is_mass)
@@ -1719,9 +1724,10 @@ class BCRY_OT_edit_render_mesh(bpy.types.Operator):
         return {'FINISHED'}
 
     def invoke(self, context, event):
+        self.object_ = context.active_object
         if self.object_ is None or self.object_.type not in ('MESH', 'EMPTY'):
             self.report({'ERROR'}, "Please select a mesh or empty object.")
-            return {'FINISHED'}
+            return {'CANCELLED'}
 
         self.mass, self.is_mass = udp.get_udp(self.object_,
                                               "mass", self.mass, self.is_mass)
@@ -1794,8 +1800,10 @@ class BCRY_OT_edit_joint_node(bpy.types.Operator):
 
     def execute(self, context):
         if self.object_ is None:
-            bcPrint("Please select a object.")
-            return {'FINISHED'}
+            self.object_ = context.active_object
+        if self.object_ is None or self.object_.type not in ('MESH', 'EMPTY'):
+            self.report({'ERROR'}, "Please select a mesh or empty object.")
+            return {'CANCELLED'}
 
         udp.edit_udp(self.object_, "limit", self.limit, self.is_limit)
         udp.edit_udp(self.object_, "bend", self.bend, self.is_bend)
@@ -1809,9 +1817,10 @@ class BCRY_OT_edit_joint_node(bpy.types.Operator):
         return {'FINISHED'}
 
     def invoke(self, context, event):
+        self.object_ = context.active_object
         if self.object_ is None or self.object_.type not in ('MESH', 'EMPTY'):
             self.report({'ERROR'}, "Please select a mesh or empty object.")
-            return {'FINISHED'}
+            return {'CANCELLED'}
 
         self.limit, self.is_limit = udp.get_udp(
             self.object_, "limit", self.limit, self.is_limit)
@@ -1891,9 +1900,10 @@ class BCRY_OT_edit_deformable(bpy.types.Operator):
     object_ = None
 
     def invoke(self, context, event):
+        self.object_ = context.active_object
         if self.object_ is None or self.object_.type not in ('MESH', 'EMPTY'):
             self.report({'ERROR'}, "Please select a mesh or empty object.")
-            return {'FINISHED'}
+            return {'CANCELLED'}
 
         self.stiffness, self.is_stiffness = udp.get_udp(
             self.object_, "stiffness", self.stiffness, self.is_stiffness)
@@ -1916,8 +1926,10 @@ class BCRY_OT_edit_deformable(bpy.types.Operator):
 
     def execute(self, context):
         if self.object_ is None:
-            bcPrint("Please select a object.")
-            return {'FINISHED'}
+            self.object_ = context.active_object
+        if self.object_ is None or self.object_.type not in ('MESH', 'EMPTY'):
+            self.report({'ERROR'}, "Please select a mesh or empty object.")
+            return {'CANCELLED'}
 
         udp.edit_udp(
             self.object_,
@@ -2822,7 +2834,8 @@ class BCRY_OT_physicalize_skeleton(bpy.types.Operator):
                 materials['single'] = bpy.data.materials.new(
                     single_material_name)
 
-            materials['single'].diffuse_color = (0.016, 0.016, 0.016)
+            materials['single'].diffuse_color = (
+                0.016, 0.016, 0.016, self.physic_alpha)
             return
 
         mat_primitive_name = "{}__01__No_Draw__physProxyNoDraw".format(
@@ -3046,43 +3059,28 @@ class BCRY_OT_clear_skeleton_physics(bpy.types.Operator):
         col.separator()
 
     def execute(self, context):
-        armature = bpy.context.active_object
-        physic_armature = None
+        armature = context.active_object
+        if armature is None or armature.type != 'ARMATURE':
+            self.report({'ERROR'}, 'Select an armature object.')
+            return {'CANCELLED'}
         physic_name = "{}_Phys".format(armature.name)
         group = utils.get_chr_node_from_skeleton(armature)
 
+        objects_to_remove = []
         if self.physic_proxies and group:
-            armature.select_set(False)
-            for object_ in group.objects:
-                if utils.is_bone_geometry(object_):
-                    object_.select_set(True)
-                    bpy.context.view_layer.objects.active = object_
-            bpy.ops.object.delete()
+            objects_to_remove.extend(
+                object_ for object_ in group.objects
+                if utils.is_bone_geometry(object_))
+        if self.physic_skeleton:
+            physic_armature = bpy.data.objects.get(physic_name)
+            if physic_armature is not None:
+                objects_to_remove.append(physic_armature)
 
-        if self.physic_skeleton and (physic_name in bpy.data.objects):
-            physic_armature = bpy.data.objects[physic_name]
-
-            armature.select_set(False)
-            physic_armature.select_set(True)
-            bpy.context.view_layer.objects.active = physic_armature
-            bpy.ops.object.delete()
+        for object_ in objects_to_remove:
+            bpy.data.objects.remove(object_, do_unlink=True)
 
         return {'FINISHED'}
 
-
-class BCRY_OT_rebuild_armature(bpy.types.Operator):
-    '''Rebuild armature to fix export errors.'''
-    bl_label = "Rebuild armature"
-    bl_idname = "bcry.rebuild_armature"
-    bl_options = {'REGISTER', 'UNDO'}
-
-    def execute(self, context):
-
-        armature = bpy.context.active_object
-
-        utils.rebuild_armature(armature)
-
-        return {'FINISHED'}
 
 # ------------------------------------------------------------------------------
 # Export Handler:
@@ -3243,8 +3241,8 @@ class BCRY_OT_export(bpy.types.Operator, ExportHelper):
 
         except exceptions.BCryException as exception:
             bcPrint(exception.what(), 'error')
-            bpy.ops.bcry.display_error(
-                'INVOKE_DEFAULT', message=exception.what())
+            self.report({'ERROR'}, exception.what())
+            return {'CANCELLED'}
 
         return {'FINISHED'}
 
@@ -3378,8 +3376,8 @@ class BCRY_OT_export_animations(bpy.types.Operator, ExportHelper):
 
         except exceptions.BCryException as exception:
             bcPrint(exception.what(), 'error')
-            bpy.ops.bcry.display_error(
-                'INVOKE_DEFAULT', message=exception.what())
+            self.report({'ERROR'}, exception.what())
+            return {'CANCELLED'}
 
         return {'FINISHED'}
 
@@ -3565,8 +3563,8 @@ class BCRY_OT_quick_export(bpy.types.Operator, ExportHelper):
 
         except exceptions.BCryException as exception:
             bcPrint(exception.what(), 'error')
-            bpy.ops.bcry.display_error(
-                'INVOKE_DEFAULT', message=exception.what())
+            self.report({'ERROR'}, exception.what())
+            return {'CANCELLED'}
 
         return {'FINISHED'}
 
@@ -3840,15 +3838,6 @@ class BCRY_PT_bone_utilities_panel(View3DPanel, Panel):
             BCRY_OT_clear_skeleton_physics.bl_idname,
             text="Clear Skeleton Physics",
             icon="PHYSICS")
-        col = layout.column(align=True)
-        row = col.row(align=True)
-        row = col.row()
-        row.label(text="Experimental:")
-        row = col.row()
-        row.operator(
-            BCRY_OT_rebuild_armature.bl_idname,
-            text="Rebuild armature",
-            icon="OUTLINER_DATA_ARMATURE")
 
 
 class BCRY_PT_mesh_utilities_panel(View3DPanel, Panel):
@@ -4186,7 +4175,6 @@ def get_classes_to_register():
         BCRY_OT_add_breakable_joint,
         BCRY_OT_add_branch,
         BCRY_OT_add_branch_joint,
-        BCRY_OT_rebuild_armature,
 
         BCRY_OT_generate_lods,
 

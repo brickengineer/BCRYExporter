@@ -40,6 +40,7 @@ class CrytekDaeAnimationExporter(export.CrytekDaeExporter):
         self._config = config
         self._doc = Document()
 
+    @utils.restore_scene_state
     def export(self):
         self._prepare_for_export()
 
@@ -92,13 +93,11 @@ class CrytekDaeAnimationExporter(export.CrytekDaeExporter):
                 bcPrint("Animation is being preparing to process.")
                 bcPrint("Animation frame range are [{} - {}]".format(frame_start, frame_end))
 
-                if node_type == 'i_caf':
-                    utils.add_fakebones(group)
                 try:
+                    if node_type == 'i_caf':
+                        utils.add_fakebones(group)
                     self._export_library_animation_clips_and_animations(libanmcl, libanm, group)
                     self._export_library_visual_scenes(visual_scene, group)
-                except RuntimeError:
-                    pass
                 finally:
                     if node_type == 'i_caf':
                         utils.remove_fakebones()
@@ -142,7 +141,9 @@ class CrytekDaeAnimationExporter(export.CrytekDaeExporter):
                 is_animation = True
 
                 props_name = self._create_properties_name(object_, group)
-                bone_name = "{!s}{!s}".format(object_.name, props_name)
+                name = (object_.parent_bone if utils.is_fakebone(object_)
+                        else object_.name)
+                bone_name = "{!s}{!s}".format(name, props_name)
 
                 for axis in iter(AXES):
                     animation = self._get_animation_location(object_, bone_name, axis, anim_id)
@@ -186,6 +187,10 @@ class CrytekDaeAnimationExporter(export.CrytekDaeExporter):
             parameter,
             anim_id):
         for axis in iter(AXES):
+            if not any(curve.data_path == parameter
+                       and curve.array_index == AXES[axis]
+                       for curve in object_.animation_data.action.fcurves):
+                continue
             inst = self._doc.createElement("instance_animation")
             inst.setAttribute(
                 "url", "#{!s}-{!s}_{!s}_{!s}".format(
@@ -210,7 +215,7 @@ class CrytekDaeAnimationExporter(export.CrytekDaeExporter):
         multiplier = utils.to_degrees
         target = "{!s}{!s}{!s}{!s}".format(bone_name,
                                            "/rotation_",
-                                           axis,
+                                            axis.lower(),
                                            ".ANGLE")
 
         animation_element = self._get_animation_attribute(object_,
@@ -255,9 +260,9 @@ class CrytekDaeAnimationExporter(export.CrytekDaeExporter):
                     sources["interpolation"].append(
                         keyframe_point.interpolation)
                     sources["intangent"].extend(
-                        [utils.frame_to_time(khlx), khly])
+                        [utils.frame_to_time(khlx), khly * multiplier])
                     sources["outangent"].extend(
-                        [utils.frame_to_time(khrx), khry])
+                        [utils.frame_to_time(khrx), khry * multiplier])
 
                 animation_element = self._doc.createElement("animation")
                 animation_element.setAttribute("id", id_prefix)

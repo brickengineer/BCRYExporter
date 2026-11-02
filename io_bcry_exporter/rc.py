@@ -26,9 +26,10 @@ import os
 import shutil
 import subprocess
 import tempfile
-import threading
 import multiprocessing
+from array import array
 
+from . import exceptions
 from .outpipe import bcPrint
 
 
@@ -38,14 +39,10 @@ class RCInstance:
         self.__config = config
 
     def convert_tif(self, source):
-        converter = _TIFConverter(self.__config, source)
-        conversion_thread = threading.Thread(target=converter)
-        conversion_thread.start()
+        _TIFConverter(self.__config, source)()
 
     def convert_dae(self, source):
-        converter = _DAEConverter(self.__config, source)
-        conversion_thread = threading.Thread(target=converter)
-        conversion_thread.start()
+        _DAEConverter(self.__config, source)()
 
 
 class _DAEConverter:
@@ -56,56 +53,62 @@ class _DAEConverter:
 
     def __call__(self):
         filepath = bpy.path.ensure_ext(self.__config.filepath, ".dae")
-        utils.generate_xml(filepath, self.__doc, overwrite=True)
+        original_error = None
+        try:
+            utils.generate_xml(filepath, self.__doc, overwrite=True)
+            dae_path = utils.get_absolute_path_for_rc(filepath)
 
-        dae_path = utils.get_absolute_path_for_rc(filepath)
+            if not self.__config.disable_rc:
+                rc_params = ["/verbose", "/threads={processors}".format(processors = multiprocessing.cpu_count()), "/refresh"]
+                if self.__config.vcloth_pre_process:
+                    rc_params.extend(("/wait=0", "/forceVCloth"))
 
-        if not self.__config.disable_rc:
-            rc_params = ["/verbose", "/threads={processors}".format(processors = multiprocessing.cpu_count()), "/refresh"]
-            if self.__config.vcloth_pre_process:
-                rc_params.append("/wait=0 /forceVCloth")
-
-            rc_process = run_rc(self.__config.rc_path, dae_path, rc_params)
-
-            if rc_process is not None:
-                rc_process.wait()
-
+                rc_process = run_rc(self.__config.rc_path, dae_path, rc_params)
+                _wait_for_rc(rc_process, dae_path)
                 if not self.__config.is_animation_process:
                     self.__recompile(dae_path)
                 else:
                     self.__rename_anm_files(dae_path)
 
-        if self.__config.make_layer:
-            lyr_contents = self.__make_layer()
-            lyr_path = os.path.splitext(filepath)[0] + ".lyr"
-            utils.generate_file(lyr_path, lyr_contents)
-
-        if not self.__config.save_dae:
-            rcdone_path = "{}.rcdone".format(dae_path)
-            utils.remove_file(dae_path)
-            utils.remove_file(rcdone_path)
+            if self.__config.make_layer:
+                lyr_contents = self.__make_layer()
+                lyr_path = os.path.splitext(filepath)[0] + ".lyr"
+                utils.generate_file(lyr_path, lyr_contents)
+        except BaseException as exception:
+            original_error = exception
+            raise
+        finally:
+            if not self.__config.save_dae:
+                cleanup_errors = []
+                for path in (filepath, "{}.rcdone".format(filepath)):
+                    try:
+                        utils.remove_file(path)
+                    except FileNotFoundError:
+                        pass
+                    except OSError as exception:
+                        cleanup_errors.append((path, exception))
+                if cleanup_errors:
+                    message = "Cannot clean up intermediate export files: " + "; ".join(
+                        "{}: {}".format(path, error)
+                        for path, error in cleanup_errors)
+                    bcPrint(message, 'error')
+                    if original_error is None:
+                        raise exceptions.BCryException(message) from cleanup_errors[0][1]
+                    original_error.add_note(message)
 
     def __recompile(self, dae_path):
-        name = os.path.basename(dae_path)
         output_path = os.path.dirname(dae_path)
         ALLOWED_NODE_TYPES = ("chr", "skin")
-        for group in utils.get_export_nodes():
+        for group in utils.get_mesh_export_nodes(
+                getattr(self.__config, 'export_selected_nodes', False)):
             node_type = utils.get_node_type(group)
             if node_type in ALLOWED_NODE_TYPES:
                 out_file = os.path.join(output_path, group.name)
                 args = [
-                    self.__config.rc_path,
                     "/refresh",
-                    "/vertexindexformat=u16",
-                    out_file]
-                rc_second_pass = subprocess.Popen(args)
-            elif node_type == 'i_caf':
-                try:
-                    os.remove(os.path.join(output_path, ".animsettings"))
-                    os.remove(os.path.join(output_path, ".caf"))
-                    os.remove(os.path.join(output_path, ".$animsettings"))
-                except:
-                    pass
+                    "/vertexindexformat=u16"]
+                rc_second_pass = run_rc(self.__config.rc_path, out_file, args)
+                _wait_for_rc(rc_second_pass, out_file)
 
     def __rename_anm_files(self, dae_path):
         output_path = os.path.dirname(dae_path)
@@ -259,54 +262,30 @@ class _TIFConverter:
 
     def __init__(self, config, source):
         self.__config = config
-        self.__images_to_convert = source
+        self.__images_to_convert = list(dict.fromkeys(
+            image for image in source if image is not None))
         self.__tmp_images = {}
-        self.__tmp_dir = tempfile.mkdtemp("CryBlend")
+        self.__tmp_dir = None
 
     def __call__(self):
-        for image in self.__images_to_convert:
-            rc_params = self.__get_rc_params(image.filepath)
-            tiff_image_path = self.__get_temp_tiff_image_path(image)
-
-            tiff_image_for_rc = utils.get_absolute_path_for_rc(tiff_image_path)
-            bcPrint(tiff_image_for_rc)
-
-            try:
-                self.__create_normal_texture(image)
-            except:
-                bcPrint("Failed to invert green channel")
-
-            rc_process = run_rc(self.__config.texture_rc_path,
-                                tiff_image_for_rc,
-                                rc_params)
-
-            # re-save the original image after running the RC to
-            # prevent the original one from getting lost
-            try:
-                if ("_ddn" in image.name):
-                    image.save()
-            except:
-                bcPrint("Failed to invert green channel")
-
-            rc_process.wait()
-
-        if self.__config.texture_rc_path:
-            self.__save_tiffs()
-
-        self.__remove_tmp_files()
-
-    def __create_normal_texture(self, image):
-        if ("_ddn" in image.name):
-            # make a copy to prevent editing the original image
-            temp_normal_image = image.copy()
-            self.__invert_green_channel(temp_normal_image)
-            # save to file and delete the temporary image
-            new_normal_image_path = "{}_cb_normal.{}".format(os.path.splitext(
-                temp_normal_image.filepath_raw)[0],
-                os.path.splitext(
-                temp_normal_image.filepath_raw)[1])
-            temp_normal_image.save_render(filepath=new_normal_image_path)
-            bpy.data.images.remove(temp_normal_image)
+        if not self.__images_to_convert:
+            return
+        try:
+            with tempfile.TemporaryDirectory(suffix='BCRY') as directory:
+                self.__tmp_dir = directory
+                for image in self.__images_to_convert:
+                    rc_params = self.__get_rc_params(image.filepath)
+                    tiff_image_path = self.__get_temp_tiff_image_path(image)
+                    tiff_image_for_rc = utils.get_absolute_path_for_rc(
+                        tiff_image_path)
+                    rc_process = run_rc(self.__config.texture_rc_path,
+                                        tiff_image_for_rc, rc_params)
+                    _wait_for_rc(rc_process, tiff_image_for_rc)
+                if getattr(self.__config, 'save_tiffs', False):
+                    self.__save_tiffs()
+        finally:
+            self.__tmp_images.clear()
+            self.__tmp_dir = None
 
     def __get_rc_params(self, destination_path):
         rc_params = ["/verbose", "/threads={processors}".format(processors=multiprocessing.cpu_count()), "/refresh"]
@@ -318,63 +297,53 @@ class _TIFConverter:
 
         return rc_params
 
-    def __invert_green_channel(self, image):
-        override = {'edit_image': bpy.data.images[image.name]}
-        bpy.ops.image.invert(override, invert_g=True)
-        image.update()
-
     def __get_temp_tiff_image_path(self, image):
-        # check if the image already is a .tif
-        image_extension = utils.get_extension_from_path(image.filepath)
-        bcPrint(image_extension)
-
-        if ".tif" == image_extension:
-            bcPrint(
-                "Image {!r} is already a tif, not converting".format(
-                    image.name), 'debug')
-            return image.filepath
+        image_extension = utils.get_extension_from_path(image.filepath).lower()
+        if image_extension in ('.tif', '.tiff') and '_ddn' not in image.name:
+            return utils.get_absolute_path(image.filepath)
 
         tiff_image_path = utils.get_path_with_new_extension(image.filepath,
                                                             "tif")
         tiff_image_absolute_path = utils.get_absolute_path(tiff_image_path)
         tiff_file_name = os.path.basename(tiff_image_path)
 
-        tmp_file_path = os.path.join(self.__tmp_dir, tiff_file_name)
-
-        if tiff_image_path != image.filepath:
-            self.__save_as_tiff(image, tmp_file_path)
-            self.__tmp_images[tmp_file_path] = (tiff_image_absolute_path)
-
+        image_directory = tempfile.mkdtemp(dir=self.__tmp_dir)
+        tmp_file_path = os.path.join(image_directory, tiff_file_name)
+        self.__save_as_tiff(image, tmp_file_path)
+        self.__tmp_images[tmp_file_path] = tiff_image_absolute_path
         return tmp_file_path
 
     def __save_as_tiff(self, image, tiff_file_path):
-        originalPath = image.filepath
-
+        pixels = array('f', [0.0]) * len(image.pixels)
+        image.pixels.foreach_get(pixels)
+        if '_ddn' in image.name:
+            for index in range(1, len(pixels), image.channels):
+                pixels[index] = 1.0 - pixels[index]
+        temporary_image = image.copy()
         try:
-            image.filepath_raw = tiff_file_path
-            image.file_format = 'TIFF'
-            image.save()
-
+            temporary_image.pixels.foreach_set(pixels)
+            temporary_image.update()
+            temporary_image.filepath_raw = tiff_file_path
+            temporary_image.file_format = 'TIFF'
+            temporary_image.save()
         finally:
-            image.filepath = originalPath
+            bpy.data.images.remove(temporary_image)
 
     def __save_tiffs(self):
         for tmp_image, dest_image in self.__tmp_images.items():
-            bcPrint("Moving tmp image: {!r} to {!r}".format(tmp_image,
-                                                            dest_image),
-                    'debug')
-            shutil.move(tmp_image, dest_image)
-
-    def __remove_tmp_files(self):
-        for tmp_image in self.__tmp_images:
             try:
-                bcPrint("Removing tmp image: {!r}".format(tmp_image), 'debug')
-                os.remove(tmp_image)
-            except FileNotFoundError:
-                pass
+                with open(dest_image, 'xb') as destination:
+                    with open(tmp_image, 'rb') as source:
+                        shutil.copyfileobj(source, destination)
+            except FileExistsError:
+                bcPrint("Keeping existing TIFF: {!r}".format(dest_image),
+                        'warning')
 
-        os.removedirs(self.__tmp_dir)
-        self.__tmp_images.clear()
+
+def _wait_for_rc(process, filepath):
+    if process is None or process.wait() != 0:
+        raise exceptions.BCryException(
+            "Resource Compiler failed for {!r}.".format(filepath))
 
 
 def run_rc(rc_path, files_to_process, params=None):
@@ -386,15 +355,15 @@ def run_rc(rc_path, files_to_process, params=None):
     else:
         process_params.append(files_to_process)
 
-    process_params.extend(params)
+    process_params.extend(params or [])
 
     bcPrint("RC Parameters: {}".format(params))
     bcPrint("Processing File: {}".format(files_to_process))
 
     try:
         run_object = subprocess.Popen(process_params)
-    except:
-        raise exceptions.NoRcSelectedException
+    except OSError as exception:
+        raise exceptions.NoRcSelectedException from exception
 
     print()
     return run_object

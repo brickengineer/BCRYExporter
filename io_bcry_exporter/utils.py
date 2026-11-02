@@ -33,6 +33,7 @@ import subprocess
 import sys
 import time
 import xml.dom.minidom
+from functools import wraps
 from xml.dom.minidom import Document, parseString
 
 import bmesh
@@ -44,6 +45,47 @@ from .outpipe import bcPrint
 
 # Globals:
 to_degrees = 180.0 / math.pi
+_export_meshes = {}
+_split_modifiers = {}
+
+
+def restore_scene_state(function):
+    @wraps(function)
+    def wrapped(*args, **kwargs):
+        scene = bpy.context.scene
+        view_layer = bpy.context.view_layer
+        active = view_layer.objects.active
+        selected = tuple(bpy.context.selected_objects)
+        mode = active.mode if active is not None else 'OBJECT'
+        active_collection = view_layer.active_layer_collection
+        frame = scene.frame_current
+        subframe = scene.frame_subframe
+        frame_range = scene.frame_start, scene.frame_end
+        armatures = [(data, data.pose_position,
+                      [(collection, collection.is_visible)
+                       for collection in data.collections_all])
+                     for data in bpy.data.armatures]
+        try:
+            if active is not None and mode != 'OBJECT':
+                bpy.ops.object.mode_set(mode='OBJECT')
+            return function(*args, **kwargs)
+        finally:
+            for data, pose_position, collections in armatures:
+                data.pose_position = pose_position
+                for collection, visible in collections:
+                    collection.is_visible = visible
+            scene.frame_start, scene.frame_end = frame_range
+            scene.frame_set(frame, subframe=subframe)
+            view_layer.active_layer_collection = active_collection
+            for object_ in view_layer.objects:
+                object_.select_set(object_ in selected)
+            if active is not None and active.name in view_layer.objects:
+                view_layer.objects.active = active
+                if mode != 'OBJECT':
+                    bpy.ops.object.mode_set(mode=mode)
+            else:
+                view_layer.objects.active = None
+    return wrapped
 
 
 # ------------------------------------------------------------------------------
@@ -163,82 +205,70 @@ def get_geometry_name(group, object_):
 
 def get_bmesh(object_, apply_modifiers=False):
     set_active(object_)
-
-    # bmesh may be gotten only in edit mode for active object.
-    # Unfortunately Blender goes in edit mode just objects
-    # in which first layer with bpy.ops.object.mode_set(mode='EDIT')
-    # So we must temporarily activate first layer for objects which it is not
-    # already in first layer. Also scene first layer must be active.
-    # That lacking related with Blender, if it will fix in future that
-    # code will be clean.
-
-    # CAUTION: "Smooth by Angle" modifier (an "Essential" library geometry node actually, not normal modifier) does not take effect during export,
-    # so replace "Smooth by Angle" modifier with an 'EDGE_SPLIT' modifier with same settings, so here we only need to check 'EDGE_SPLIT' modifiers and restore it on export end
-    bcry_split_modifier(object_)
-
-    depsgraph = bpy.context.evaluated_depsgraph_get()
-    #bpy.ops.object.mode_set(mode='EDIT')
-
-    if apply_modifiers:
-        object_eval = object_.evaluated_get(depsgraph)
-        mesh = object_eval.to_mesh()
+    mesh_owner = None
+    bmesh_ = None
+    try:
+        bcry_split_modifier(object_)
+        if apply_modifiers:
+            bpy.context.view_layer.update()
+            depsgraph = bpy.context.evaluated_depsgraph_get()
+            mesh_owner = object_.evaluated_get(depsgraph)
+        else:
+            mesh_owner = object_
+        mesh = mesh_owner.to_mesh()
+        _export_meshes[object_] = mesh_owner, mesh
         bmesh_ = bmesh.new()
         bmesh_.from_mesh(mesh)
-
-    else:
-        mesh = object_.to_mesh()
-        bmesh_ = bmesh.new()
-        bmesh_.from_mesh(mesh)
-
-    return bmesh_
+        return bmesh_
+    except Exception:
+        if bmesh_ is not None:
+            bmesh_.free()
+        if mesh_owner is not None:
+            mesh_owner.to_mesh_clear()
+        _export_meshes.pop(object_, None)
+        remove_bcry_split_modifier(object_)
+        raise
 
 
 def clear_bmesh(object_, bmesh_):
-    #bpy.ops.object.mode_set(mode='OBJECT')
-    remove_bcry_split_modifier(object_)
-    object_.to_mesh_clear()
+    try:
+        bmesh_.free()
+    finally:
+        state = _export_meshes.pop(object_, None)
+        try:
+            if state is not None:
+                state[0].to_mesh_clear()
+        finally:
+            remove_bcry_split_modifier(object_)
+
+
+def get_export_mesh(object_):
+    state = _export_meshes.get(object_)
+    return state[1] if state is not None else object_.data
 
 
 def bcry_split_modifier(object_):
-    has_smooth_by_angle_modfier = False
-    split_angle = 0
-    use_edge_angle = False
-    use_edge_sharp = False
-    for modifier in object_.modifiers:
-        # It is an "Essential" library geometry node, can't detect type, just use name here
-        if modifier.name.startswith("Smooth by Angle"):
-            use_edge_angle = True
-            use_edge_sharp = not modifier["Socket_1"]
-            split_angle = modifier["Input_1"]
-            has_smooth_by_angle_modfier = True
-            # Remove smooth by angle modifier
-            object_.modifiers.remove(modifier)
-            break
-    
-    if has_smooth_by_angle_modfier:
-        edge_split_modifier = object_.modifiers.new('BCRY_EDGE_SPLIT', 'EDGE_SPLIT')
-        edge_split_modifier.use_edge_angle = use_edge_angle
-        edge_split_modifier.use_edge_sharp = use_edge_sharp
-        edge_split_modifier.split_angle = split_angle
+    states = _split_modifiers.setdefault(object_, [])
+    for modifier in tuple(object_.modifiers):
+        if (modifier.type != 'NODES' or not modifier.show_viewport
+                or not modifier.name.startswith('Smooth by Angle')
+                or 'Input_1' not in modifier or 'Socket_1' not in modifier):
+            continue
+        split = object_.modifiers.new('BCRY_EDGE_SPLIT', 'EDGE_SPLIT')
+        states.append((modifier, modifier.show_viewport, split))
+        split.use_edge_angle = True
+        split.use_edge_sharp = not modifier['Socket_1']
+        split.split_angle = modifier['Input_1']
+        index = list(object_.modifiers).index(modifier)
+        object_.modifiers.move(len(object_.modifiers) - 1, index + 1)
+        modifier.show_viewport = False
 
 
 
 def remove_bcry_split_modifier(object_):
-    edge_split_modifier = object_.modifiers.get('BCRY_EDGE_SPLIT')
-    if edge_split_modifier:
-        active_object = bpy.context.active_object
-        bpy.context.view_layer.objects.active = object_
-        bpy.ops.object.modifier_add_node_group(asset_library_type='ESSENTIALS', asset_library_identifier="", relative_asset_identifier="geometry_nodes\\smooth_by_angle.blend\\NodeTree\\Smooth by Angle")
-        for modifier in object_.modifiers:
-            if modifier.name.startswith("Smooth by Angle"):
-                # The restored "Smooth by Angle" modifier will be named to "Smooth by Angle.001", change it back
-                modifier.name = "Smooth by Angle"
-                modifier["Input_1"] = edge_split_modifier.split_angle
-                modifier["Socket_1"] = not edge_split_modifier.use_edge_sharp
-                bpy.context.view_layer.objects.active = active_object
-                break
-
-        object_.modifiers.remove(edge_split_modifier)
+    for modifier, visible, split in _split_modifiers.pop(object_, []):
+        modifier.show_viewport = visible
+        object_.modifiers.remove(split)
 
 
 def get_tessfaces(bmesh_):
@@ -399,84 +429,6 @@ def get_joint_name(object_, index=1):
 
     return joint_name
 
-
-def rebuild_armature(armature):
-    """ Try to re-create new armature bone to bone
-    for fix wrong export bone positions and hierarchy"""
-    old_bones = []
-    new_bones = []
-    obj_childrens = []
-    temp_suffix = "+oldbcry"
-
-    # collect a list of childrens in armature for fix vgroup names
-    for obj in armature.children:
-        obj_childrens.append(obj)
-
-    bpy.ops.object.mode_set(mode="EDIT")
-
-    edit_bones = armature.data.edit_bones
-    bones_count = len(edit_bones)
-
-    # collect a list of old bones
-    for bone in edit_bones:
-        old_bones.append(bone)
-
-    # create a list of new bones (empty)
-    for i in range(bones_count):
-        new_bone = edit_bones.new(str(i))
-        new_bones.append(new_bone)
-
-    for i in range(bones_count):
-        # copy bones attributes
-        new_bones[i].head = old_bones[i].head
-        new_bones[i].tail = old_bones[i].tail
-        new_bones[i].roll = old_bones[i].roll
-        new_bones[i].use_connect = old_bones[i].use_connect
-        new_bones[i].use_deform = old_bones[i].use_deform
-        old_name = old_bones[i].name
-        old_bones[i].name = old_bones[i].name + temp_suffix
-        new_bones[i].name = old_name
-
-        # copy custom properties
-        if len(old_bones[i].items()) > 0:
-            for p in old_bones[i].items():
-                new_bones[i][p[0]] = p[1]
-
-    for bone in edit_bones:
-        if bone.name.endswith(temp_suffix):
-            if bone.parent is not None:
-                split_name = bone.name.split("+")
-                temp_name = split_name[0]
-                split_name = bone.parent.name.split("+")
-                parent_name = split_name[0]
-                edit_bones[temp_name].parent = edit_bones[parent_name]
-
-    for i in range(bones_count):
-        edit_bones.remove(old_bones[i])
-
-    bpy.ops.object.mode_set(mode="OBJECT")
-
-    if len(obj_childrens) > 0:
-        for obj in armature.children:
-            if obj.type == 'MESH':
-                for v in obj.vertex_groups.values():
-                    if v.name.endswith(temp_suffix):
-                        split_name = v.name.split("+")
-                        v.name = split_name[0]
-
-    # Rename data_path in assigned Actions through NLA strips
-
-    if len(bpy.data.actions) > 0:
-
-        for action in bpy.data.actions:
-            for fc in action.fcurves:
-                if fc.data_path:
-                    if temp_suffix in fc.data_path:
-                        fc.data_path = fc.data_path.replace(temp_suffix, "")
-
-                if fc.group:
-                    if temp_suffix in fc.group.name:
-                        fc.group.name = fc.group.name.replace(temp_suffix, "")
 
 # ------------------------------------------------------------------------------
 # Path Manipulations:
@@ -665,13 +617,16 @@ def replace_invalid_rc_characters(string):
 
 def fix_weights():
     for object_ in get_type("skins"):
-        override = get_3d_context(object_)
         try:
-            bpy.ops.object.vertex_group_normalize_all(
-                override, lock_active=False)
-        except:
+            with bpy.context.temp_override(
+                    object=object_, active_object=object_,
+                    selected_objects=[object_],
+                    selected_editable_objects=[object_]):
+                bpy.ops.object.vertex_group_normalize_all(lock_active=False)
+        except RuntimeError as exception:
             raise exceptions.BCryException(
-                "Please fix weightless vertices first.")
+                "Cannot normalize weights for {!r}: {}".format(
+                    object_.name, exception)) from exception
     bcPrint("Weights Corrected.")
 
 
@@ -912,9 +867,10 @@ def is_dummy(object_):
 # ------------------------------------------------------------------------------
 
 
-def get_fakebone(bone_name):
+def get_fakebone(bone_name, armature=None):
     return next((fakebone for fakebone in get_type("fakebones")
-                 if fakebone.name == bone_name), None)
+                 if fakebone.parent_bone == bone_name
+                 and (armature is None or fakebone.parent == armature)), None)
 
 
 def is_fakebone(object_):
@@ -924,25 +880,24 @@ def is_fakebone(object_):
         return False
 
 
-def add_fakebones(group=None):
+def add_fakebones(group=None, armatures=None):
     '''Add helpers to track bone transforms.'''
-    scene = bpy.context.scene
 
     """Set the Master collection(Scene) active, prevent errors when
     fakebones doesn't create if current active scene is hide"""
     x = bpy.context.view_layer.layer_collection
     bpy.context.view_layer.active_layer_collection = x
-    remove_unused_meshes()
 
     if group:
-        for object_ in group.objects:
-            if object_.type == 'ARMATURE':
-                armature = object_
-    else:
-        armature = get_armature()
+        armatures = [get_armature_from_node(group)]
+    elif armatures is None:
+        armatures = get_type('controllers')
+    for armature in dict.fromkeys(armatures):
+        _create_fakebones(armature, group)
 
-    if armature is None:
-        return
+
+def _create_fakebones(armature, group):
+    scene = bpy.context.scene
 
     skeleton = armature.data
 
@@ -980,17 +935,15 @@ def add_fakebones(group=None):
 
 def remove_fakebones():
     '''Select to remove all fakebones from the scene.'''
-    if len(get_type("fakebones")) == 0:
-        return
-    old_mode = bpy.context.mode
-    if old_mode != 'OBJECT':
-        bpy.ops.object.mode_set(mode='OBJECT')
-    deselect_all()
     for fakebone in get_type("fakebones"):
-        fakebone.select_set(True)
-        bpy.ops.object.delete(use_global=False)
-    if old_mode != 'OBJECT':
-        bpy.ops.object.mode_set(mode=old_mode)
+        mesh = fakebone.data
+        action = (fakebone.animation_data.action
+                  if fakebone.animation_data else None)
+        bpy.data.objects.remove(fakebone, do_unlink=True)
+        if mesh.users == 0:
+            bpy.data.meshes.remove(mesh)
+        if action is not None and action.users == 0:
+            bpy.data.actions.remove(action)
 
 
 # ------------------------------------------------------------------------------
@@ -1066,7 +1019,11 @@ def set_keyframe(armature, frame, location_list, rotation_list):
     for bone in armature.pose.bones:
         index = frame - bpy.context.scene.frame_start
 
-        fakeBone = bpy.data.objects[bone.name]
+        fakeBone = get_fakebone(bone.name, armature)
+        if fakeBone is None:
+            raise exceptions.BCryException(
+                "Export helper missing for {}:{}.".format(
+                    armature.name, bone.name))
 
         fakeBone.location = location_list[index][bone.name]
         fakeBone.rotation_euler = rotation_list[index][bone.name]

@@ -52,6 +52,7 @@ class CrytekDaeExporter:
         self._m_exporter = export_materials.CrytekMaterialExporter(config)
         print("CrytekDaeExporter_INIT")
 
+    @utils.restore_scene_state
     def export(self):
         self._prepare_for_export()
 
@@ -75,13 +76,23 @@ class CrytekDaeExporter:
         self._export_library_materials(root_element)
         self._export_library_geometries(root_element)
 
-        utils.add_fakebones()
+        selected = tuple(bpy.context.selected_objects)
+        active = bpy.context.view_layer.objects.active
+        armatures = dict.fromkeys(
+            utils.get_armature_for_object(object_)
+            for group in utils.get_mesh_export_nodes(
+                self._config.export_selected_nodes)
+            for object_ in group.objects if object_.type == 'MESH'
+            and not utils.is_bone_geometry(object_))
+        armatures.pop(None, None)
         try:
+            utils.add_fakebones(armatures=armatures)
+            for object_ in bpy.context.view_layer.objects:
+                object_.select_set(object_ in selected)
+            bpy.context.view_layer.objects.active = active
             self._export_library_controllers(root_element)
             self._export_library_animation_clips_and_animations(root_element)
             self._export_library_visual_scenes(root_element)
-        except RuntimeError:
-            pass
         finally:
             utils.remove_fakebones()
 
@@ -93,6 +104,18 @@ class CrytekDaeExporter:
         write_scripts(self=self, config=self._config)
 
     def _prepare_for_export(self):
+        for group in utils.get_mesh_export_nodes(
+                self._config.export_selected_nodes):
+            for object_ in group.objects:
+                if object_.type != 'MESH':
+                    continue
+                for polygon in object_.data.polygons:
+                    index = polygon.material_index
+                    if (index >= len(object_.material_slots)
+                            or object_.material_slots[index].material is None):
+                        raise exceptions.BCryException(
+                            "Mesh {!r} has faces using empty material slot {}."
+                            .format(object_.name, index + 1))
         utils.clean_file(self._config.export_selected_nodes)
 
         if self._config.fix_weights:
@@ -191,45 +214,46 @@ class CrytekDaeExporter:
                     apply_modifiers = False
 
                 bmesh_ = utils.get_bmesh(object_, apply_modifiers)
-                geometry_node = self._doc.createElement("geometry")
-                geometry_name = utils.get_geometry_name(collection, object_)
-                geometry_node.setAttribute("id", geometry_name)
-                mesh_node = self._doc.createElement("mesh")
+                try:
+                    geometry_node = self._doc.createElement("geometry")
+                    geometry_name = utils.get_geometry_name(collection, object_)
+                    geometry_node.setAttribute("id", geometry_name)
+                    mesh_node = self._doc.createElement("mesh")
 
-                print()
-                bcPrint('"{}" object is being processed...'.format(object_.name))
+                    print()
+                    bcPrint('"{}" object is being processed...'.format(object_.name))
 
-                start_time = process_time()
-                self._write_positions(bmesh_, mesh_node, geometry_name)
-                bcPrint('Positions have been writed {:.4f} seconds.'.format(process_time() - start_time))
+                    start_time = process_time()
+                    self._write_positions(bmesh_, mesh_node, geometry_name)
+                    bcPrint('Positions have been writed {:.4f} seconds.'.format(process_time() - start_time))
 
-                start_time = process_time()
-                self._write_normals(object_, bmesh_, mesh_node, geometry_name)
-                bcPrint('Normals have been writed {:.4f} seconds.'.format(process_time() - start_time))
+                    start_time = process_time()
+                    self._write_normals(object_, bmesh_, mesh_node, geometry_name)
+                    bcPrint('Normals have been writed {:.4f} seconds.'.format(process_time() - start_time))
 
-                start_time = process_time()
-                self._write_uvs(object_, bmesh_, mesh_node, geometry_name)
-                bcPrint('UVs have been writed {:.4f} seconds.'.format(process_time() - start_time))
+                    start_time = process_time()
+                    self._write_uvs(object_, bmesh_, mesh_node, geometry_name)
+                    bcPrint('UVs have been writed {:.4f} seconds.'.format(process_time() - start_time))
 
-                start_time = process_time()
-                self._write_vertex_colors(object_, bmesh_, mesh_node, geometry_name)
-                bcPrint('Vertex colors have been writed {:.4f} seconds.'.format(process_time() - start_time))
+                    start_time = process_time()
+                    self._write_vertex_colors(object_, bmesh_, mesh_node, geometry_name)
+                    bcPrint('Vertex colors have been writed {:.4f} seconds.'.format(process_time() - start_time))
 
-                start_time = process_time()
-                self._write_vertices(mesh_node, geometry_name)
-                bcPrint('Vertices have been writed {:.4f} seconds.'.format(process_time() - start_time))
+                    start_time = process_time()
+                    self._write_vertices(mesh_node, geometry_name)
+                    bcPrint('Vertices have been writed {:.4f} seconds.'.format(process_time() - start_time))
 
-                start_time = process_time()
-                self._write_triangle_list(
-                    object_, bmesh_, mesh_node, geometry_name)
-                bcPrint('Triangle list have been writed {:.4f} seconds.'.format(process_time() - start_time))
+                    start_time = process_time()
+                    self._write_triangle_list(
+                        object_, bmesh_, mesh_node, geometry_name)
+                    bcPrint('Triangle list have been writed {:.4f} seconds.'.format(process_time() - start_time))
 
-                extra = self._create_double_sided_extra("MAYA")
-                mesh_node.appendChild(extra)
-                geometry_node.appendChild(mesh_node)
-                libgeo.appendChild(geometry_node)
-
-                utils.clear_bmesh(object_, bmesh_)
+                    extra = self._create_double_sided_extra("MAYA")
+                    mesh_node.appendChild(extra)
+                    geometry_node.appendChild(mesh_node)
+                    libgeo.appendChild(geometry_node)
+                finally:
+                    utils.clear_bmesh(object_, bmesh_)
                 bcPrint('"{}" object has been processed for "{}" node.'.format(object_.name, collection.name))
 
     def _write_positions(self, bmesh_, mesh_node, geometry_name):
@@ -259,7 +283,11 @@ class CrytekDaeExporter:
 
         float_normals = None
         if self._config.custom_normals:
-            float_normals = utils.get_custom_normals(bmesh_, use_edge_angle, split_angle)
+            mesh = utils.get_export_mesh(object_)
+            float_normals = [
+                component for face in bmesh_.faces
+                for index in mesh.polygons[face.index].loop_indices
+                for component in mesh.corner_normals[index].vector]
         else:
             float_normals = utils.get_normal_array(bmesh_, use_edge_angle, use_edge_sharp, split_angle)
 
@@ -285,28 +313,39 @@ class CrytekDaeExporter:
         source = utils.write_source(id_, "float", float_uvs, "ST")
         mesh_node.appendChild(source)
 
+    def _get_vertex_color_layer(self, object_, bmesh_):
+        attribute = utils.get_export_mesh(object_).color_attributes.active_color
+        if attribute is None:
+            return None
+        layers = (bmesh_.loops.layers if attribute.domain == 'CORNER'
+                  else bmesh_.verts.layers)
+        layers = (layers.color if attribute.data_type == 'BYTE_COLOR'
+                  else layers.float_color)
+        layer = layers.get(attribute.name)
+        if layer is None:
+            raise exceptions.BCryException(
+                "Cannot read color attribute {!r} on mesh {!r}.".format(
+                    attribute.name, object_.name))
+        return layer, attribute.domain
+
     def _write_vertex_colors(self, object_, bmesh_, mesh_node, geometry_name):
         float_colors = []
         alpha_found = False
 
-        active_layer = bmesh_.loops.layers.color.active
-        if object_.data.vertex_colors:
+        color_layer = self._get_vertex_color_layer(object_, bmesh_)
+        if color_layer is not None:
+            active_layer, domain = color_layer
             if active_layer.name.lower() == 'alpha':
                 alpha_found = True
-                for vert in bmesh_.verts:
-                    loop = vert.link_loops[0]
-                    color = loop[active_layer]
-                    alpha_color = (color[0] + color[1] + color[2]) / 3.0
-                    float_colors.extend([1.0, 1.0, 1.0, alpha_color])
-            else:
-                for vert in bmesh_.verts:
-                    # Warning and skip loose verts
-                    if( len(vert.link_loops) == 0 ):
-                        bcPrint(f"Error: vert {vert.index} has no link_loops! Clean mesh (CleanUp/DeleteLoose) and try again!", 'error')
-                        continue
-                    loop = vert.link_loops[0]
-                    color = loop[active_layer]
-                    float_colors.extend([color[0], color[1], color[2]])
+            for face in bmesh_.faces:
+                for loop in face.loops:
+                    element = loop if domain == 'CORNER' else loop.vert
+                    color = element[active_layer]
+                    if alpha_found:
+                        alpha = (color[0] + color[1] + color[2]) / 3.0
+                        float_colors.extend([1.0, 1.0, 1.0, alpha])
+                    else:
+                        float_colors.extend(color[:3])
 
         if float_colors:
             id_ = "{!s}-vcol".format(geometry_name)
@@ -323,9 +362,14 @@ class CrytekDaeExporter:
 
     def _write_triangle_list(self, object_, bmesh_, mesh_node, geometry_name):
         tessfaces = utils.get_tessfaces(bmesh_)
-        current_material_index = 0
-        for material, materialname in self._m_exporter.get_materials_for_object(
-                object_).items():
+        vertex_colors = self._get_vertex_color_layer(object_, bmesh_)
+        material_slots = self._m_exporter.get_material_slots_for_object(object_)
+        if any(face.material_index not in material_slots
+               for face in bmesh_.faces):
+            raise exceptions.BCryException(
+                "Mesh {!r} has faces without an exportable material."
+                .format(object_.name))
+        for current_material_index, (_, materialname) in material_slots.items():
             triangles = ''
             triangle_count = 0
             normal_uv_index = 0
@@ -342,12 +386,10 @@ class CrytekDaeExporter:
                         for vert in tessface:
                             normal_uv = norm_uv_indices[str(vert)]
                             dae_vertex = self._write_vertex_data(
-                                vert, normal_uv, normal_uv, object_.data.vertex_colors)
+                                vert, normal_uv, normal_uv, vertex_colors)
                             triangles = join(triangles, dae_vertex)
 
                 normal_uv_index += len(face.verts)
-
-            current_material_index += 1
 
             if triangle_count == 0:
                 continue
@@ -375,7 +417,7 @@ class CrytekDaeExporter:
                     2,
                     'uvs',
                     'TEXCOORD'))
-            if object_.data.vertex_colors:
+            if vertex_colors is not None:
                 inputs.append(
                     utils.write_input(
                         geometry_name,
@@ -394,9 +436,9 @@ class CrytekDaeExporter:
             mesh_node.appendChild(triangle_list)
 
     def _write_vertex_data(self, vert, normal, uv, vertex_colors):
-        if vertex_colors:
+        if vertex_colors is not None:
             return "{:d} {:d} {:d} {:d} ".format(
-                vert, normal, uv, vert)
+                vert, normal, uv, uv)
         else:
             return "{:d} {:d} {:d} ".format(vert, normal, uv)
 
@@ -730,7 +772,9 @@ class CrytekDaeExporter:
             node.setAttribute("name", bone_name)
             node.setIdAttribute("id")
 
-            fakebone = utils.get_fakebone(bone.name)
+            armature = (object_ if object_.type == 'ARMATURE'
+                        else utils.get_armature_for_object(object_))
+            fakebone = utils.get_fakebone(bone.name, armature)
             if fakebone is not None:
                 self._write_transforms(fakebone, node)
 
@@ -1032,7 +1076,8 @@ class CrytekDaeExporter:
         return helper
 
     def _create_properties_name(self, bone, group):
-        bone_name = bone.name.replace("__", "*")
+        name = bone.parent_bone if utils.is_fakebone(bone) else bone.name
+        bone_name = name.replace("__", "*")
         node_name = utils.get_node_name(group)
         props_name = '%{!s}%--PRprops_name={!s}'.format(node_name, bone_name)
 

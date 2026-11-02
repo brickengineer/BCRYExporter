@@ -275,7 +275,7 @@ def get_textures(material):
 def get_diffuse_texture(material):
     image = None
     try:
-        if bpy.context.scene.render.engine == 'CYCLES':
+        if material.use_nodes:
             for node in material.node_tree.nodes:
                 if node.type == 'TEX_IMAGE':
                     if node.name == 'Image Texture' or \
@@ -299,7 +299,7 @@ def get_diffuse_texture(material):
 def get_specular_texture(material):
     image = None
     try:
-        if bpy.context.scene.render.engine == 'CYCLES':
+        if material.use_nodes:
             for node in material.node_tree.nodes:
                 if node.type == 'TEX_IMAGE':
                     if node.name.lower().find('specular') != -1:
@@ -322,7 +322,7 @@ def get_specular_texture(material):
 def get_normal_texture(material):
     image = None
     try:
-        if bpy.context.scene.render.engine == 'CYCLES':
+        if material.use_nodes:
             for node in material.node_tree.nodes:
                 if node.type == 'TEX_IMAGE':
                     if node.name.lower().find('normal') != -1:
