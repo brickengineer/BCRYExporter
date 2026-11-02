@@ -38,7 +38,8 @@ class CrytekMaterialExporter:
         self._config = config
         self._doc = Document()
         self._materials = material_utils.get_materials(
-            config.export_selected_nodes)
+            config.export_selected_nodes,
+            include_textures=config.include_material_textures)
 
     def generate_materials(self):
         material_utils.generate_mtl_files(self._config, self._materials)
@@ -59,23 +60,28 @@ class CrytekMaterialExporter:
     # ------------------------------------------------------------------------------
 
     def export_library_images(self, library_images):
+        if not (self._config.include_material_textures
+                or self._config.convert_textures):
+            return
+
         images = dict.fromkeys(
             image for material in self._materials.values()
             for image in material_utils.get_textures(material) if image)
         self._write_texture_nodes(list(images), library_images)
 
     def _write_texture_nodes(self, images, library_images):
-        for image in images:
-            image_node = self._doc.createElement('image')
-            image_node.setAttribute("id", image.name)
-            image_node.setAttribute("name", image.name)
-            init_form = self._doc.createElement('init_from')
-            path = material_utils.get_image_path_for_game(
-                image, self._config.game_dir)
-            path_node = self._doc.createTextNode(path)
-            init_form.appendChild(path_node)
-            image_node.appendChild(init_form)
-            library_images.appendChild(image_node)
+        if self._config.include_material_textures:
+            for image in images:
+                image_node = self._doc.createElement('image')
+                image_node.setAttribute("id", image.name)
+                image_node.setAttribute("name", image.name)
+                init_from = self._doc.createElement('init_from')
+                path = material_utils.get_image_path_for_game(
+                    image, self._config.game_dir)
+                path_node = self._doc.createTextNode(path)
+                init_from.appendChild(path_node)
+                image_node.appendChild(init_from)
+                library_images.appendChild(image_node)
 
         if self._config.convert_textures:
             material_utils.convert_image_to_dds(images, self._config)
@@ -92,7 +98,9 @@ class CrytekMaterialExporter:
     def _export_library_effects_material(
             self, material, material_name, library_effects):
 
-        images = material_utils.get_textures(material)
+        images = (material_utils.get_textures(material)
+                  if self._config.include_material_textures
+                  else (None, None, None))
 
         effect_node = self._doc.createElement("effect")
         effect_node.setAttribute("id", "{}_fx".format(material_name))

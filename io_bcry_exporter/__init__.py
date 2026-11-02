@@ -3136,7 +3136,7 @@ class BCRY_OT_export(bpy.types.Operator, ExportHelper):
     )
     include_material_textures: BoolProperty(
         name="Include Material Textures",
-        description="Include texture references in generated .mtl files.",
+        description="Include texture references in .dae and generated .mtl files.",
         default=False
     )
     convert_textures: BoolProperty(
@@ -3274,9 +3274,7 @@ class BCRY_OT_export(bpy.types.Operator, ExportHelper):
         box = col.box()
         box.label(text="Material & Texture", icon="TEXTURE")
         box.prop(self, "generate_materials")
-        row = box.row()
-        row.enabled = self.generate_materials
-        row.prop(self, "include_material_textures")
+        box.prop(self, "include_material_textures")
         box.prop(self, "convert_textures")
 
         box = col.box()
@@ -3457,7 +3455,7 @@ class BCRY_OT_quick_export(bpy.types.Operator, ExportHelper):
     )
     include_material_textures: BoolProperty(
         name="Include Material Textures",
-        description="Include texture references in generated .mtl files.",
+        description="Include texture references in .dae and generated .mtl files.",
         default=False
     )
     convert_textures: BoolProperty(
@@ -3596,9 +3594,7 @@ class BCRY_OT_quick_export(bpy.types.Operator, ExportHelper):
         box = col.box()
         box.label(text="Material & Texture", icon="TEXTURE")
         box.prop(self, "generate_materials")
-        row = box.row()
-        row.enabled = self.generate_materials
-        row.prop(self, "include_material_textures")
+        box.prop(self, "include_material_textures")
         box.prop(self, "convert_textures")
 
         box = col.box()

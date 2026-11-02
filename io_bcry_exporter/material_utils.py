@@ -40,7 +40,9 @@ from .rc import RCInstance
 
 def generate_mtl_files(_config, materials=None):
     if materials is None:
-        materials = get_materials(_config.export_selected_nodes)
+        materials = get_materials(
+            _config.export_selected_nodes,
+            include_textures=_config.include_material_textures)
 
     for node in get_material_groups(materials):
         _doc = Document()
@@ -66,6 +68,8 @@ def generate_mtl_files(_config, materials=None):
             set_material_attributes(material, material_name, material_node)
             if _config.include_material_textures:
                 add_textures(_doc, material, material_node, _config)
+            elif _config.convert_textures:
+                convert_image_to_dds(get_textures(material), _config)
             set_public_params(_doc, material, material_node)
 
             sub_material.appendChild(material_node)
@@ -107,7 +111,7 @@ def sort_materials_by_names(unordered_materials):
     return materials
 
 
-def get_materials(just_selected=False):
+def get_materials(just_selected=False, include_textures=True):
     materials = OrderedDict()
     material_counter = {}
 
@@ -125,12 +129,11 @@ def get_materials(just_selected=False):
 
                     material.name = utils.replace_invalid_rc_characters(
                         material.name)
-                    for image in get_textures(material):
-                        try:
-                            image.name = utils.replace_invalid_rc_characters(
-                                image.name)
-                        except AttributeError:
-                            pass
+                    if include_textures:
+                        for image in get_textures(material):
+                            if image is not None:
+                                image.name = utils.replace_invalid_rc_characters(
+                                    image.name)
 
                     node, index, name, physics = get_material_parts(
                         node_name, slot.material.name)
@@ -576,6 +579,14 @@ def get_image_path_for_game(image, game_dir):
 
     image_path = os.path.normpath(bpy.path.abspath(image.filepath))
     image_path = "{}.dds".format(os.path.splitext(image_path)[0])
-    image_path = os.path.relpath(image_path, game_dir)
+    try:
+        image_path = os.path.relpath(image_path, game_dir)
+    except ValueError as error:
+        raise exceptions.BCryException(
+            "Cannot make texture path {!r} relative to Game Directory {!r}: "
+            "the paths are on different drives. Disable Include Material "
+            "Textures to export without texture references, or place the "
+            "texture on the same drive as the Game Directory."
+            .format(image_path, game_dir)) from error
 
     return image_path

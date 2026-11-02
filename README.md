@@ -16,6 +16,8 @@ Copy `io_bcry_exporter` folder to `<BLENDER PATH>\scripts\addons` directory.<br>
 
 ## Update History
 ### pending updates
+#### [Material] Texture reference control across DAE and MTL
+* When `Include Material Textures` option is off, exporting will no longer resolve game-relative texture paths, including textures on another drive.
 ### 1.4
 #### [Character]
 * Fixed failure to export skin node if check "export selected only". (_Keep skeleton export helpers separate per armature and preserve the selected export nodes while creating them._)
